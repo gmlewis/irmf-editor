@@ -1,5 +1,14 @@
 # [IRMF Shader](https://github.com/gmlewis/irmf) Editor
 
+## Try it out!
+
+*This is work-in-progress - the editor is not functional yet.*
+
+Note that *nothing* is saved in the editor! You must copy/paste your
+shader source and save it locally or all edits will be lost!
+
+* [gmlewis.github.io/irmf-editor](https://gmlewis.github.io/irmf-editor)
+
 ## Summary
 
 IRMF is a file format used to describe [GLSL
@@ -18,18 +27,19 @@ details.
 
 ## IRMF Shader Editor Status
 
-This is the start of an in-browser IRMF shader editor, built on
+This is the very start of the in-browser IRMF shader editor, built on
 Microsoft's amazing open-source [Monaco Editor](https://microsoft.github.io/monaco-editor/monarch.html).
 
 The technology stack used is Go compiled to WebAssembly using the
-extremely handle tool [go-wasm-cli](https://github.com/mfrachet/go-wasm-cli).
+extremely handy tool [go-wasm-cli](https://github.com/mfrachet/go-wasm-cli).
 
-The goal is to host this static web app on Google App Engine and allow
-people to easily design their IRMF shaders and visualize the models
-in real time. All processing will be done with WebGL on the client
-browser. People will edit their model, then copy/paste the code to
-their local filesystem to save it offline. This keeps the app super-simple
-and prevents abuse by not storing anything on the server.
+The goal is to allow people to easily design their IRMF shaders and
+visualize the models in real time from this [static web app](https://gmlewis.github.io/irmf-editor).
+All processing will be done with WebGL within the client browser.
+People will edit their model, then copy/paste the code to
+their local filesystem to save it offline.
+This keeps the app super-simple and prevents abuse by not storing
+anything on the server.
 
 ----------------------------------------------------------------------
 
