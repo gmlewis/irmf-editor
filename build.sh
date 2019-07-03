@@ -1,2 +1,5 @@
 #!/bin/bash -ex
-tinygo build -o main.wasm -target wasm ./main.go
+git checkout gh-pages
+git merge master
+# tinygo build -o main.wasm -target wasm ./main.go
+go-wasm start
