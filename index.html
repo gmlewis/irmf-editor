@@ -10,13 +10,28 @@
 .gutter.gutter-horizontal {
     cursor: ew-resize;
 }
+.split {
+  -webkit-box-sizing: border-box;
+     -moz-box-sizing: border-box;
+          box-sizing: border-box;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+.gutter {
+  background-color: green;
+  width: 10px;
+}
+.split.split-horizontal, .gutter.gutter-horizontal {
+  height: 100%;
+  float: left;
+}
   </style>
 </head>
 
 <body style="background:#000">
-<div>
-  <div class="split" id="one" style="width:800px;height:600px;border:1px solid grey"></div>
-  <div class="split" id="two" style="width:800px;height:600px;border:1px solid grey">
+<div style="height:800px">
+  <div class="split" id="one" style="width:800px;height:800px;border:1px solid grey"></div>
+  <div class="split" id="two" style="width:800px;height:800px;border:1px solid grey">
     <canvas id="glCanvas" width="640" height="480"></canvas>
   </div>
 </div>
