@@ -1,15 +1,29 @@
 <!doctype html>
 <html>
 <head>
- <title>irmf-editor</title>
- <meta charset="utf-8">
+  <title>irmf-editor</title>
+  <meta charset="utf-8">
+  <style>
+.split, .gutter.gutter-horizontal {
+    float: left;
+}
+.gutter.gutter-horizontal {
+    cursor: ew-resize;
+}
+  </style>
 </head>
 
 <body style="background:#000">
-<div id="container" style="width:800px;height:600px;border:1px solid grey"></div>
-<!-- <div id="canvas" style="width:50%;height:100%;border:1px solid grey;position:absolute;top:0,float:right"></div> -->
+<div>
+  <div class="split" id="one" style="width:800px;height:600px;border:1px solid grey"></div>
+  <div class="split" id="two"></div>
+</div>
+
+<script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/split.js/1.5.11/split.min.js"></script>
 <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.17.1/min/vs/loader.js"></script>
 <script>
+  Split(['#one', '#two']);
+
   require.config({ paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.17.1/min/vs' }});
 
   // Before loading vs/editor/editor.main, define a global MonacoEnvironment that overwrites
@@ -39,7 +53,7 @@
 		{ token: 'comment.css', foreground: '0000ff' } // will inherit fontStyle from `comment` above
 	]
     });
-    editor = monaco.editor.create(document.getElementById('container'), {
+    editor = monaco.editor.create(document.getElementById('one'), {
       value: [
           '/*{',
           '  irmf: "1.0",',
