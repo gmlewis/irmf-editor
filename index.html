@@ -27,6 +27,7 @@
     }
   };
 
+  var editor = null;
   require(["vs/editor/editor.main"], function () {
     console.log('editor started');
     monaco.editor.defineTheme('myCustomTheme', {
@@ -38,7 +39,7 @@
 		{ token: 'comment.css', foreground: '0000ff' } // will inherit fontStyle from `comment` above
 	]
     });
-    var editor = monaco.editor.create(document.getElementById('container'), {
+    editor = monaco.editor.create(document.getElementById('container'), {
       value: [
           '/*{',
           '  irmf: "1.0",',
