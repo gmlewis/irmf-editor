@@ -8,9 +8,9 @@ const twoDiv = document.getElementById('two');
 // Get A WebGL context
 /** @type {HTMLCanvasElement} */
 const canvas = document.getElementById("canvas");
-const gl = canvas.getContext("webgl");
+const gl = canvas.getContext("webgl2");
 if (!gl) {
-  console.log('Browser does not support WebGL!');
+  console.log('Browser does not support WebGL2!');
 }
 
 // Set up Monaco editor...
@@ -87,145 +87,39 @@ require(["vs/editor/editor.main"], function () {
 
 // Rendering...
 
-var vs = `
-uniform mat4 u_worldViewProjection;
-uniform vec3 u_lightWorldPos;
-uniform mat4 u_world;
-uniform mat4 u_viewInverse;
-uniform mat4 u_worldInverseTranspose;
-
-attribute vec4 position;
-attribute vec3 normal;
-attribute vec2 texcoord;
-
-varying vec4 v_position;
-varying vec2 v_texCoord;
-varying vec3 v_normal;
-varying vec3 v_surfaceToLight;
-varying vec3 v_surfaceToView;
-
+var vs = `#version 300 es
 void main() {
-  v_texCoord = texcoord;
-  v_position = u_worldViewProjection * position;
-  v_normal = (u_worldInverseTranspose * vec4(normal, 0)).xyz;
-  v_surfaceToLight = u_lightWorldPos - (u_world * position).xyz;
-  v_surfaceToView = (u_viewInverse[3] - (u_world * position)).xyz;
-  gl_Position = v_position;
-}
-`;
-var fs = `
-precision mediump float;
-
-varying vec4 v_position;
-varying vec2 v_texCoord;
-varying vec3 v_normal;
-varying vec3 v_surfaceToLight;
-varying vec3 v_surfaceToView;
-
-uniform vec4 u_lightColor;
-uniform vec4 u_ambient;
-uniform sampler2D u_diffuse;
-uniform vec4 u_specular;
-uniform float u_shininess;
-uniform float u_specularFactor;
-
-vec4 lit(float l ,float h, float m) {
-  return vec4(1.0,
-              max(l, 0.0),
-              (l > 0.0) ? pow(max(0.0, h), m) : 0.0,
-              1.0);
-}
-
+  gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );
+}`;
+var fs = `#version 300 es
+precision highp float;
+precision highp int;
+out vec4 out_FragColor;
 void main() {
-  vec4 diffuseColor = texture2D(u_diffuse, v_texCoord);
-  vec3 a_normal = normalize(v_normal);
-  vec3 surfaceToLight = normalize(v_surfaceToLight);
-  vec3 surfaceToView = normalize(v_surfaceToView);
-  vec3 halfVector = normalize(surfaceToLight + surfaceToView);
-  vec4 litR = lit(dot(a_normal, surfaceToLight),
-                    dot(a_normal, halfVector), u_shininess);
-  vec4 outColor = vec4((
-  u_lightColor * (diffuseColor * litR.y + diffuseColor * u_ambient +
-                u_specular * litR.z * u_specularFactor)).rgb,
-      diffuseColor.a);
-  gl_FragColor = outColor;
-}
-`;
+  out_FragColor = vec4( 1.0 );
+}`;
 
-const m4 = twgl.m4;
-const programInfo = twgl.createProgramInfo(gl, [vs, fs]);
+var scene = new THREE.Scene();
+var aspectRatio = canvas.offsetWidth / canvas.offsetHeight;
+console.log('aspectRatio=' + aspectRatio.toString());
+var camera = new THREE.PerspectiveCamera(75, aspectRatio, 0.1, 1000);
 
-const arrays = {
-  position: [1, 1, -1, 1, 1, 1, 1, -1, 1, 1, -1, -1, -1, 1, 1, -1, 1, -1, -1, -1, -1, -1, -1, 1, -1, 1, 1, 1, 1, 1, 1, 1, -1, -1, 1, -1, -1, -1, -1, 1, -1, -1, 1, -1, 1, -1, -1, 1, 1, 1, 1, -1, 1, 1, -1, -1, 1, 1, -1, 1, -1, 1, -1, 1, 1, -1, 1, -1, -1, -1, -1, -1],
-  normal: [1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1],
-  texcoord: [1, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1],
-  indices: [0, 1, 2, 0, 2, 3, 4, 5, 6, 4, 6, 7, 8, 9, 10, 8, 10, 11, 12, 13, 14, 12, 14, 15, 16, 17, 18, 16, 18, 19, 20, 21, 22, 20, 22, 23],
-};
-const bufferInfo = twgl.createBufferInfoFromArrays(gl, arrays);
+var renderer = new THREE.WebGLRenderer({ canvas: canvas, context: gl });
 
-const tex = twgl.createTexture(gl, {
-  min: gl.NEAREST,
-  mag: gl.NEAREST,
-  src: [
-    255, 255, 255, 255,
-    192, 192, 192, 255,
-    192, 192, 192, 255,
-    255, 255, 255, 255,
-  ],
-});
+var geometry = new THREE.BoxGeometry(1, 1, 1);
+var material = new THREE.ShaderMaterial({ vertexShader: vs, fragmentShader: fs });
+var cube = new THREE.Mesh(geometry, material);
+scene.add(cube);
 
-const uniforms = {
-  u_lightWorldPos: [1, 8, -10],
-  u_lightColor: [1, 0.8, 0.8, 1],
-  u_ambient: [0, 0, 0, 1],
-  u_specular: [1, 1, 1, 1],
-  u_shininess: 50,
-  u_specularFactor: 1,
-  u_diffuse: tex,
+camera.position.z = 5;
+
+var animate = function () {
+  requestAnimationFrame(animate);
+
+  cube.rotation.x += 0.01;
+  cube.rotation.y += 0.01;
+
+  renderer.render(scene, camera);
 };
 
-function render(time) {
-  time *= 0.001;
-  twgl.resizeCanvasToDisplaySize(gl.canvas);
-  gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
-
-  gl.enable(gl.DEPTH_TEST);
-  gl.enable(gl.CULL_FACE);
-  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-
-  const fov = 30 * Math.PI / 180;
-  const aspect = gl.canvas.clientWidth / gl.canvas.clientHeight;
-  const zNear = 0.5;
-  const zFar = 10;
-  const projection = m4.perspective(fov, aspect, zNear, zFar);
-  const eye = [1, 4, -6];
-  const target = [0, 0, 0];
-  const up = [0, 1, 0];
-
-  const camera = m4.lookAt(eye, target, up);
-  const view = m4.inverse(camera);
-  const viewProjection = m4.multiply(projection, view);
-  const world = m4.rotationY(time);
-
-  uniforms.u_viewInverse = camera;
-  uniforms.u_world = world;
-  uniforms.u_worldInverseTranspose = m4.transpose(m4.inverse(world));
-  uniforms.u_worldViewProjection = m4.multiply(viewProjection, world);
-
-  gl.useProgram(programInfo.program);
-  twgl.setBuffersAndAttributes(gl, programInfo, bufferInfo);
-  twgl.setUniforms(programInfo, uniforms);
-  gl.drawElements(gl.TRIANGLES, bufferInfo.numElements, gl.UNSIGNED_SHORT, 0);
-
-  // requestAnimationFrame(render);
-}
-requestAnimationFrame(render);
-
-var isMouseDown = false;
-canvas.onmousedown = function () { isMouseDown = true };
-canvas.onmouseup = function () { isMouseDown = false };
-canvas.onmousemove = function () {
-  if (isMouseDown) {
-    requestAnimationFrame(render);
-  }
-};
+animate();

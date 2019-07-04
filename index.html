@@ -32,20 +32,31 @@
       height: 100%;
       float: left;
     }
+
+    html,
+    body {
+      height: 100%;
+      background: #000;
+      margin: 0;
+    }
+
+    .full-height {
+      height: 100%;
+    }
   </style>
 </head>
 
-<body style="background:#000">
-  <div style="height:800px">
-    <div class="split" id="one" style="width:800px;height:800px;border:1px solid grey"></div>
-    <div class="split" id="two" style="width:800px;height:800px;border:1px solid grey;overflow:hidden">
+<body>
+  <div class="full-height">
+    <div class="split full-height" id="one" style="border:1px solid grey"></div>
+    <div class="split full-height" id="two" style="border:1px solid grey;overflow:hidden">
       <canvas id="canvas" width="640" height="480"></canvas>
     </div>
   </div>
 </body>
 
 <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/split.js/1.5.11/split.min.js"></script>
-<script type="text/javascript" src="https://twgljs.org/dist/2.x/twgl-full.min.js"></script>
+<script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/three.js/106/three.min.js"></script>
 <script type="text/javascript"
   src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.17.1/min/vs/loader.js"></script>
 <script src="js/startup.js"></script>
