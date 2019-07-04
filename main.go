@@ -9,34 +9,33 @@ import (
 
 	"github.com/gowebapi/webapi"
 	"github.com/gowebapi/webapi/core/js"
+	"github.com/gowebapi/webapi/dom"
 )
 
 var (
-	window *webapi.Window
-	editor js.Value
+	window   *webapi.Window
+	editor   js.Value
+	glCanvas *dom.Element
 )
 
 func main() {
+	window = webapi.GetWindow()
+	source := loadSource()
+
 	// Wait until JS is initialized
-	for window == nil || editor.Type() == js.TypeNull {
-		window = webapi.GetWindow()
+	f := func() {
 		editor = js.Global().Get("editor")
+		glCanvas = window.Document().GetElementById("glCanvas")
+	}
+	f()
+	for editor.Type() == js.TypeNull || editor.Type() == js.TypeUndefined || glCanvas == nil {
 		time.Sleep(100 * time.Millisecond)
+		f()
 	}
 
-	loadSource()
-
-	// element := window.Document().GetElementById("foo")
-	// button := html.HTMLButtonElementFromJS(element)
-	// button.SetInnerText("Press me!")
-	//
-	// count := 1
-	// callback := domcore.EventHandlerToJS(func(event *domcore.Event) interface{} {
-	// 	button.SetInnerText(fmt.Sprint("Count: ", count))
-	// 	count++
-	// 	return nil
-	// })
-	// button.SetOnclick(callback)
+	if source != "" {
+		editor.Call("setValue", source)
+	}
 
 	fmt.Println("Application irmf-editor is now started")
 
@@ -45,19 +44,20 @@ func main() {
 	<-c
 }
 
-func loadSource() {
+func loadSource() string {
 	const oldPrefix = "/?s=github.com/"
 	const newPrefix = "https://raw.githubusercontent.com/"
 	url := window.Location().Value_JS.String()
 	i := strings.Index(url, oldPrefix)
 	if i < 0 {
-		return
+		fmt.Println("No source requested in URL path.")
+		return ""
 	}
 	location := url[i+len(oldPrefix):]
 	lower := strings.ToLower(location)
 	if !strings.HasSuffix(lower, ".irmf") {
 		window.Alert2("irmf-editor will only load .irmf files")
-		return
+		return ""
 	}
 
 	location = newPrefix + strings.Replace(location, "/blob/", "/", 1)
@@ -65,13 +65,14 @@ func loadSource() {
 	resp, err := http.Get(location)
 	if err != nil {
 		window.Alert2("unable to load IRMF shader")
-		return
+		return ""
 	}
 	buf, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		fmt.Printf("Unable to ready response body.\n")
-		return
+		return ""
 	}
 	resp.Body.Close()
-	editor.Call("setValue", string(buf))
+	fmt.Printf("Read %v bytes from GitHub.\n", len(buf))
+	return string(buf)
 }
