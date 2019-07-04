@@ -5,6 +5,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/gowebapi/webapi"
 	"github.com/gowebapi/webapi/core/js"
@@ -16,8 +17,12 @@ var (
 )
 
 func main() {
-	window = webapi.GetWindow()
-	editor = js.Global().Get("editor")
+	// Wait until JS is initialized
+	for window == nil || editor.Type() == js.TypeNull {
+		window = webapi.GetWindow()
+		editor = js.Global().Get("editor")
+		time.Sleep(100 * time.Millisecond)
+	}
 
 	loadSource()
 
