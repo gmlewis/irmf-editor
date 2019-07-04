@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"io/ioutil"
+	"net/http"
 	"strings"
 
 	"github.com/gowebapi/webapi"
@@ -10,7 +12,7 @@ import (
 
 var (
 	window *webapi.Window
-	editor interface{}
+	editor js.Value
 )
 
 func main() {
@@ -39,18 +41,32 @@ func main() {
 }
 
 func loadSource() {
+	const oldPrefix = "/?s=github.com/"
+	const newPrefix = "https://raw.githubusercontent.com/"
 	url := window.Location().Value_JS.String()
-	i := strings.Index(url, "/?s=github.com/")
+	i := strings.Index(url, oldPrefix)
 	if i < 0 {
 		return
 	}
-	location := url[i+4:]
+	location := url[i+len(oldPrefix):]
 	lower := strings.ToLower(location)
 	if !strings.HasSuffix(lower, ".irmf") {
 		window.Alert2("irmf-editor will only load .irmf files")
 		return
 	}
 
-	fmt.Printf("location=%q\n", location)
-	fmt.Printf("editor=%#v\n", editor)
+	location = newPrefix + strings.Replace(location, "/blob/", "/", 1)
+
+	resp, err := http.Get(location)
+	if err != nil {
+		window.Alert2("unable to load IRMF shader")
+		return
+	}
+	buf, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		fmt.Printf("Unable to ready response body.\n")
+		return
+	}
+	resp.Body.Close()
+	editor.Call("setValue", string(buf))
 }

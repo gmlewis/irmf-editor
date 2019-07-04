@@ -71,7 +71,6 @@
 
     var editor = null;
     require(["vs/editor/editor.main"], function () {
-      console.log('editor started');
       monaco.editor.defineTheme('myCustomTheme', {
         base: 'vs-dark', // can also be vs or hc-black
         inherit: true, // can also be false to completely replace the builtin rules
@@ -102,6 +101,8 @@
           enabled: false
         }
       });
+      editor.updateOptions({ wordWrap: "on" });
+      console.log('editor started');
       function twoDivResized() {
         glCanvas.width = twoDiv.offsetWidth;
         glCanvas.height = twoDiv.offsetHeight;
