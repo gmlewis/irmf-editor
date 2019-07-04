@@ -1,79 +1,88 @@
 <!doctype html>
 <html>
+
 <head>
   <title>irmf-editor</title>
   <meta charset="utf-8">
   <style>
-.split, .gutter.gutter-horizontal {
-    float: left;
-}
-.gutter.gutter-horizontal {
-    cursor: ew-resize;
-}
-.split {
-  -webkit-box-sizing: border-box;
-     -moz-box-sizing: border-box;
-          box-sizing: border-box;
-  overflow-y: auto;
-  overflow-x: hidden;
-}
-.gutter {
-  background-color: green;
-  width: 10px;
-}
-.split.split-horizontal, .gutter.gutter-horizontal {
-  height: 100%;
-  float: left;
-}
+    .split,
+    .gutter.gutter-horizontal {
+      float: left;
+    }
+
+    .gutter.gutter-horizontal {
+      cursor: ew-resize;
+    }
+
+    .split {
+      -webkit-box-sizing: border-box;
+      -moz-box-sizing: border-box;
+      box-sizing: border-box;
+      overflow-y: auto;
+      overflow-x: hidden;
+    }
+
+    .gutter {
+      background-color: green;
+      width: 10px;
+    }
+
+    .split.split-horizontal,
+    .gutter.gutter-horizontal {
+      height: 100%;
+      float: left;
+    }
   </style>
 </head>
 
 <body style="background:#000">
-<div style="height:800px">
-  <div class="split" id="one" style="width:800px;height:800px;border:1px solid grey"></div>
-  <div class="split" id="two" style="width:800px;height:800px;border:1px solid grey">
-    <canvas id="glCanvas" width="640" height="480"></canvas>
+  <div style="height:800px">
+    <div class="split" id="one" style="width:800px;height:800px;border:1px solid grey"></div>
+    <div class="split" id="two" style="width:800px;height:800px;border:1px solid grey;overflow:hidden">
+      <canvas id="glCanvas" width="640" height="480"></canvas>
+    </div>
   </div>
-</div>
 
-<script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/split.js/1.5.11/split.min.js"></script>
-<script type="text/javascript" src="https://twgljs.org/dist/2.x/twgl-full.min.js"></script>
-<script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.17.1/min/vs/loader.js"></script>
-<script>
-  Split(['#one', '#two']);
-  var oneDiv = document.querySelector('#one');
+  <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/split.js/1.5.11/split.min.js"></script>
+  <script type="text/javascript" src="https://twgljs.org/dist/2.x/twgl-full.min.js"></script>
+  <script type="text/javascript"
+    src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.17.1/min/vs/loader.js"></script>
+  <script>
+    Split(['#one', '#two']);
+    var twoDiv = document.querySelector('#two');
+    var glCanvas = document.querySelector('#glCanvas');
 
-  require.config({ paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.17.1/min/vs' }});
+    require.config({ paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.17.1/min/vs' } });
 
-  // Before loading vs/editor/editor.main, define a global MonacoEnvironment that overwrites
-  // the default worker url location (used when creating WebWorkers). The problem here is that
-  // HTML5 does not allow cross-domain web workers, so we need to proxy the instantiation of
-  // a web worker through a same-domain script
-  window.MonacoEnvironment = {
-    getWorkerUrl: function(workerId, label) {
-      return `data:text/javascript;charset=utf-8,${encodeURIComponent(`
+    // Before loading vs/editor/editor.main, define a global MonacoEnvironment that overwrites
+    // the default worker url location (used when creating WebWorkers). The problem here is that
+    // HTML5 does not allow cross-domain web workers, so we need to proxy the instantiation of
+    // a web worker through a same-domain script
+    window.MonacoEnvironment = {
+      getWorkerUrl: function (workerId, label) {
+        return `data:text/javascript;charset=utf-8,${encodeURIComponent(`
         self.MonacoEnvironment = {
           baseUrl: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.17.1/min/'
         };
         importScripts('https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.17.1/min/vs/base/worker/workerMain.js');`
-      )}`;
-    }
-  };
+        )}`;
+      }
+    };
 
-  var editor = null;
-  require(["vs/editor/editor.main"], function () {
-    console.log('editor started');
-    monaco.editor.defineTheme('myCustomTheme', {
-	base: 'vs-dark', // can also be vs or hc-black
-	inherit: true, // can also be false to completely replace the builtin rules
-	rules: [
-		{ token: 'comment', foreground: 'ffa500', fontStyle: 'italic underline' },
-		{ token: 'comment.js', foreground: '008800', fontStyle: 'bold' },
-		{ token: 'comment.css', foreground: '0000ff' } // will inherit fontStyle from `comment` above
-	]
-    });
-    editor = monaco.editor.create(document.getElementById('one'), {
-      value: [
+    var editor = null;
+    require(["vs/editor/editor.main"], function () {
+      console.log('editor started');
+      monaco.editor.defineTheme('myCustomTheme', {
+        base: 'vs-dark', // can also be vs or hc-black
+        inherit: true, // can also be false to completely replace the builtin rules
+        rules: [
+          { token: 'comment', foreground: 'ffa500', fontStyle: 'italic underline' },
+          { token: 'comment.js', foreground: '008800', fontStyle: 'bold' },
+          { token: 'comment.css', foreground: '0000ff' } // will inherit fontStyle from `comment` above
+        ]
+      });
+      editor = monaco.editor.create(document.getElementById('one'), {
+        value: [
           '/*{',
           '  irmf: "1.0",',
           '  materials: ["PLA"],',
@@ -85,27 +94,35 @@
           'void mainModel4( out vec4 materials, in vec3 xyz ) {',
           '  materials[0] = 1.0;',
           '}'
-      ].join('\n'),
-      language: 'javascript',
-      scrollBeyondLastLine: false,
-      theme: "myCustomTheme"
+        ].join('\n'),
+        language: 'javascript',
+        scrollBeyondLastLine: false,
+        theme: "myCustomTheme",
+        minimap: {
+          enabled: false
+        }
+      });
+      function twoDivResized() {
+        glCanvas.width = twoDiv.offsetWidth;
+        glCanvas.height = twoDiv.offsetHeight;
+        editor.layout();
+      }
+      new ResizeObserver(twoDivResized).observe(twoDiv);
     });
-    function oneDivResized() { editor.layout(); }
-    new ResizeObserver(oneDivResized).observe(oneDiv);
-  });
-</script>
-<script src="wasm_exec.js"></script>
-<script>
-if (!WebAssembly.instantiateStreaming) { // polyfill
- WebAssembly.instantiateStreaming = async (resp, importObject) => {
- const source = await (await resp).arrayBuffer();
-  return await WebAssembly.instantiate(source, importObject);
- };
-}
-const go = new Go();
-WebAssembly.instantiateStreaming(fetch("main.wasm"), go.importObject).then((result) => {
- go.run(result.instance);
-});
-</script>
+  </script>
+  <script src="wasm_exec.js"></script>
+  <script>
+    if (!WebAssembly.instantiateStreaming) { // polyfill
+      WebAssembly.instantiateStreaming = async (resp, importObject) => {
+        const source = await (await resp).arrayBuffer();
+        return await WebAssembly.instantiate(source, importObject);
+      };
+    }
+    const go = new Go();
+    WebAssembly.instantiateStreaming(fetch("main.wasm"), go.importObject).then((result) => {
+      go.run(result.instance);
+    });
+  </script>
 </body>
+
 </html>
