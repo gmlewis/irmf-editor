@@ -81,6 +81,7 @@ require(["vs/editor/editor.main"], function () {
     canvas.width = twoDiv.offsetWidth;
     canvas.height = twoDiv.offsetHeight;
     editor.layout();
+    onCanvasResize();
   }
   new ResizeObserver(twoDivResized).observe(twoDiv);
 });
@@ -100,11 +101,12 @@ void main() {
 }`;
 
 var scene = new THREE.Scene();
-var aspectRatio = canvas.offsetWidth / canvas.offsetHeight;
-console.log('aspectRatio=' + aspectRatio.toString());
-var camera = new THREE.PerspectiveCamera(75, aspectRatio, 0.1, 1000);
+var aspectRatio = canvas.width / canvas.height;
+console.log('canvas: (' + canvas.width.toString() + ',' + canvas.height.toString() + '), aspectRatio=' + aspectRatio.toString());
+var camera = new THREE.PerspectiveCamera(45, aspectRatio, 0.1, 1000);
 
 var renderer = new THREE.WebGLRenderer({ canvas: canvas, context: gl });
+renderer.setSize(canvas.width, canvas.height);
 
 var geometry = new THREE.BoxGeometry(1, 1, 1);
 var material = new THREE.ShaderMaterial({ vertexShader: vs, fragmentShader: fs });
@@ -113,22 +115,7 @@ scene.add(cube);
 
 camera.position.z = 5;
 
-var animate = function () {
-  requestAnimationFrame(animate);
-
-  cube.rotation.x += 0.01;
-  cube.rotation.y += 0.01;
-
-  renderer.render(scene, camera);
-};
-
-// animate();
-
-var render = function () {
-  renderer.render(scene, camera);
-};
-
-var controls = new TrackballControls(camera, canvas);
+var controls = new THREE.TrackballControls(camera, canvas);
 
 controls.rotateSpeed = 1.0;
 controls.zoomSpeed = 1.2;
@@ -143,3 +130,24 @@ controls.dynamicDampingFactor = 0.3;
 controls.keys = [65, 83, 68];
 
 controls.addEventListener('change', render);
+
+canvas.addEventListener('resize', onCanvasResize, false);
+
+onCanvasResize();
+animate();
+
+function onCanvasResize() {
+  console.log('onCanvasResize: (' + canvas.width.toString() + ',' + canvas.height.toString() + ')');
+  camera.aspect = canvas.width / canvas.height;
+  camera.updateProjectionMatrix();
+  renderer.setSize(canvas.width, canvas.height);
+  controls.handleResize();
+  render();
+}
+function animate() {
+  requestAnimationFrame(animate);
+  controls.update();
+}
+function render() {
+  renderer.render(scene, camera);
+}
