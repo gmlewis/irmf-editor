@@ -13,9 +13,9 @@ import (
 )
 
 var (
-	window   *webapi.Window
-	editor   js.Value
-	glCanvas *dom.Element
+	window *webapi.Window
+	editor js.Value
+	canvas *dom.Element
 )
 
 func main() {
@@ -25,13 +25,18 @@ func main() {
 	// Wait until JS is initialized
 	f := func() {
 		editor = js.Global().Get("editor")
-		glCanvas = window.Document().GetElementById("glCanvas")
+		canvas = window.Document().GetElementById("canvas")
 	}
 	f()
-	for editor.Type() == js.TypeNull || editor.Type() == js.TypeUndefined || glCanvas == nil {
+	for editor.Type() == js.TypeNull || editor.Type() == js.TypeUndefined || canvas == nil {
 		time.Sleep(100 * time.Millisecond)
 		f()
 	}
+	// Even though the editor is defined, it may not be initialized.
+	// Wait until it has its options set.
+	// f = func() bool {
+	// 	return editor.Call('')
+	// }
 
 	if source != "" {
 		editor.Call("setValue", source)
