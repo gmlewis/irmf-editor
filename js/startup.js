@@ -217,6 +217,15 @@ function render(time) {
   twgl.setUniforms(programInfo, uniforms);
   gl.drawElements(gl.TRIANGLES, bufferInfo.numElements, gl.UNSIGNED_SHORT, 0);
 
-  requestAnimationFrame(render);
+  // requestAnimationFrame(render);
 }
 requestAnimationFrame(render);
+
+var isMouseDown = false;
+canvas.onmousedown = function () { isMouseDown = true };
+canvas.onmouseup = function () { isMouseDown = false };
+canvas.onmousemove = function () {
+  if (isMouseDown) {
+    requestAnimationFrame(render);
+  }
+};
