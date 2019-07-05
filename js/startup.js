@@ -117,7 +117,8 @@ scene.add(light);
 // var cube = new THREE.Mesh(geometry, material);
 // scene.add(cube);
 
-var axesHelper = new THREE.AxesHelper(5);
+const axisLength = 1.5;
+var axesHelper = new THREE.AxesHelper(axisLength);
 scene.add(axesHelper);
 
 // var gimbleMaterial = new THREE.SpriteMaterial({ useScreenCoordinates: true, alignment: THREE.SpriteAlignment.topRight });
@@ -146,12 +147,24 @@ const materials = [
 
 materials[0].map.center.set(.5, .5);
 materials[0].map.rotation = THREE.Math.degToRad(90);
+materials[0].map.side = THREE.DoubleSide;
+materials[0].map.transparent = true;
 materials[1].map.center.set(.5, .5);
 materials[1].map.rotation = THREE.Math.degToRad(-90);
+materials[1].map.side = THREE.DoubleSide;
+materials[1].map.transparent = true;
 materials[2].map.center.set(.5, .5);
 materials[2].map.rotation = THREE.Math.degToRad(180);
+materials[2].map.side = THREE.DoubleSide;
+materials[2].map.transparent = true;
+materials[3].map.side = THREE.DoubleSide;
+materials[3].map.transparent = true;
+materials[4].map.side = THREE.DoubleSide;
+materials[4].map.transparent = true;
 materials[5].map.center.set(.5, .5);
 materials[5].map.rotation = THREE.Math.degToRad(180);
+materials[5].map.side = THREE.DoubleSide;
+materials[5].map.transparent = true;
 
 loadManager.onLoad = () => {
   const cube = new THREE.Mesh(axesGeometry, materials);
@@ -159,7 +172,43 @@ loadManager.onLoad = () => {
   cubes.push(cube);  // add to our list of cubes to rotate
 };
 
-camera.position.z = 5;
+// Axis labels:
+const axisOffset = axisLength + 0.1;
+var text_opts_red = {
+  'font_size': 20,
+  'background_color': { 'r': 0, 'g': 0, 'b': 0, 'a': 1 },
+  'text_color': { 'r': 255, 'g': 0, 'b': 0, 'a': 1 }
+};
+var labels_data_x = ['X'];
+var labels_x = axisLabels(labels_data_x, { 'x': 1 }, [axisOffset, 0, 0],
+  text_opts_red);
+scene.add(labels_x);
+var text_opts_green = {
+  'font_size': 20,
+  'background_color': { 'r': 0, 'g': 0, 'b': 0, 'a': 1 },
+  'text_color': { 'r': 0, 'g': 255, 'b': 0, 'a': 1 }
+};
+var labels_data_y = ['Y'];
+var labels_y = axisLabels(labels_data_y, { 'y': 1 }, [0, axisOffset, 0],
+  text_opts_green);
+scene.add(labels_y);
+var text_opts_blue = {
+  'font_size': 20,
+  'background_color': { 'r': 0, 'g': 0, 'b': 0, 'a': 1 },
+  'text_color': { 'r': 0, 'g': 0, 'b': 255, 'a': 1 }
+};
+var labels_data_z = ['Z'];
+var labels_z = axisLabels(labels_data_z, { 'z': 1 }, [0, 0, axisOffset],
+  text_opts_blue);
+scene.add(labels_z);
+
+// Isometric view on startup:
+camera.position.x = 3;
+camera.position.y = -3;
+camera.position.z = 3;
+camera.up.y = 0;
+camera.up.z = 1;
+camera.lookAt([0, 0, 0]);
 
 var controls = new THREE.TrackballControls(camera, canvas);
 
@@ -176,9 +225,7 @@ controls.dynamicDampingFactor = 0.3;
 controls.keys = [65, 83, 68];
 
 controls.addEventListener('change', render);
-
 canvas.addEventListener('resize', onCanvasResize, false);
-
 onCanvasResize();
 animate();
 
