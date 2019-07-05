@@ -142,14 +142,21 @@ const frontRightTopView = new THREE.CircleBufferGeometry(0.1, 32);
 const rightBackTopView = new THREE.CircleBufferGeometry(0.1, 32);
 const backLeftTopView = new THREE.CircleBufferGeometry(0.1, 32);
 const leftFrontTopView = new THREE.CircleBufferGeometry(0.1, 32);
+const frontRightBottomView = new THREE.CircleBufferGeometry(0.1, 32);
+const rightBackBottomView = new THREE.CircleBufferGeometry(0.1, 32);
+const backLeftBottomView = new THREE.CircleBufferGeometry(0.1, 32);
+const leftFrontBottomView = new THREE.CircleBufferGeometry(0.1, 32);
 const viewPlanes = [rightView, leftView, backView, frontView, topView, bottomView,
-  frontRightTopView, rightBackTopView, backLeftTopView, leftFrontTopView];
+  frontRightTopView, rightBackTopView, backLeftTopView, leftFrontTopView,
+  frontRightBottomView, rightBackBottomView, backLeftBottomView, leftFrontBottomView];
 const viewPositions = [[0.5, 0, 0], [-0.5, 0, 0], [0, 0.5, 0], [0, -0.5, 0], [0, 0, 0.5], [0, 0, -0.5],
-[0.4, -0.4, 0.4], [0.4, 0.4, 0.4], [-0.4, 0.4, 0.4], [-0.4, -0.4, 0.4]];
+[0.4, -0.4, 0.4], [0.4, 0.4, 0.4], [-0.4, 0.4, 0.4], [-0.4, -0.4, 0.4],
+[0.4, -0.4, -0.4], [0.4, 0.4, -0.4], [-0.4, 0.4, -0.4], [-0.4, -0.4, -0.4]];
 const halfPi = 0.5 * Math.PI;
 const quarterPi = 0.25 * Math.PI;
 const viewRotations = [[0, halfPi, 0], [0, -halfPi, 0], [-halfPi, 0, 0], [halfPi, 0, 0], [0, 0, 0], [Math.PI, 0, Math.PI],
-[quarterPi, 0, quarterPi, 'ZYX'], [-quarterPi, 0, -quarterPi, 'ZYX'], [-quarterPi, 0, quarterPi, 'ZYX'], [quarterPi, 0, -quarterPi, 'ZYX']];
+[quarterPi, 0, quarterPi, 'ZYX'], [-quarterPi, 0, -quarterPi, 'ZYX'], [-quarterPi, 0, quarterPi, 'ZYX'], [quarterPi, 0, -quarterPi, 'ZYX'],
+[-quarterPi, 0, quarterPi, 'ZYX'], [quarterPi, 0, -quarterPi, 'ZYX'], [quarterPi, 0, quarterPi, 'ZYX'], [-quarterPi, 0, -quarterPi, 'ZYX']];
 const viewCallbacks = [
   function () { controls.position0.set(5, 0, 0); controls.up0.set(0, 0, 1); controls.reset(); },
   function () { controls.position0.set(-5, 0, 0); controls.up0.set(0, 0, 1); controls.reset(); },
@@ -160,7 +167,11 @@ const viewCallbacks = [
   function () { controls.position0.set(3, -3, 3); controls.up0.set(0, 0, 1); controls.reset(); },
   function () { controls.position0.set(3, 3, 3); controls.up0.set(0, 0, 1); controls.reset(); },
   function () { controls.position0.set(-3, 3, 3); controls.up0.set(0, 0, 1); controls.reset(); },
-  function () { controls.position0.set(-3, -3, 3); controls.up0.set(0, 0, 1); controls.reset(); }
+  function () { controls.position0.set(-3, -3, 3); controls.up0.set(0, 0, 1); controls.reset(); },
+  function () { controls.position0.set(3, -3, -3); controls.up0.set(0, 0, 1); controls.reset(); },
+  function () { controls.position0.set(3, 3, -3); controls.up0.set(0, 0, 1); controls.reset(); },
+  function () { controls.position0.set(-3, 3, -3); controls.up0.set(0, 0, 1); controls.reset(); },
+  function () { controls.position0.set(-3, -3, -3); controls.up0.set(0, 0, 1); controls.reset(); }
 ];
 
 const viewMesh = [];
@@ -174,6 +185,10 @@ const materials = [
   new THREE.MeshBasicMaterial({ map: loader.load('images/front.png') }),
   new THREE.MeshBasicMaterial({ map: loader.load('images/top.png') }),
   new THREE.MeshBasicMaterial({ map: loader.load('images/bottom.png') }),
+  new THREE.MeshBasicMaterial({ color: 0xffff00 }),
+  new THREE.MeshBasicMaterial({ color: 0xffff00 }),
+  new THREE.MeshBasicMaterial({ color: 0xffff00 }),
+  new THREE.MeshBasicMaterial({ color: 0xffff00 }),
   new THREE.MeshBasicMaterial({ color: 0xffff00 }),
   new THREE.MeshBasicMaterial({ color: 0xffff00 }),
   new THREE.MeshBasicMaterial({ color: 0xffff00 }),
