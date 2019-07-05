@@ -127,12 +127,31 @@ scene.add(axesHelper);
 // sprite.scale.set(64, 64, 1.0); // imageWidth, imageHeight
 // scene.add(sprite);
 
-const boxWidth = 1;
-const boxHeight = 1;
-const boxDepth = 1;
-const axesGeometry = new THREE.BoxBufferGeometry(boxWidth, boxHeight, boxDepth);
+// const boxWidth = 1;
+// const boxHeight = 1;
+// const boxDepth = 1;
+// const axesGeometry = new THREE.BoxBufferGeometry(boxWidth, boxHeight, boxDepth);
 
-const cubes = [];  // just an array we can use to rotate the cubes
+const rightView = new THREE.PlaneGeometry(1, 1);
+const leftView = new THREE.PlaneGeometry(1, 1);
+const backView = new THREE.PlaneGeometry(1, 1);
+const frontView = new THREE.PlaneGeometry(1, 1);
+const topView = new THREE.PlaneGeometry(1, 1);
+const bottomView = new THREE.PlaneGeometry(1, 1);
+const viewPlanes = [rightView, leftView, backView, frontView, topView, bottomView];
+const viewPositions = [[0.5, 0, 0], [-0.5, 0, 0], [0, 0.5, 0], [0, -0.5, 0], [0, 0, 0.5], [0, 0, -0.5]];
+const halfPi = 0.5 * Math.PI;
+const viewRotations = [[0, halfPi, 0], [0, -halfPi, 0], [-halfPi, 0, 0], [halfPi, 0, 0], [0, 0, 0], [Math.PI, 0, Math.PI]];
+const viewCallbacks = [
+  function () { console.log('right view clicked'); },
+  function () { console.log('left view clicked'); },
+  function () { console.log('back view clicked'); },
+  function () { console.log('front view clicked'); },
+  function () { console.log('top view clicked'); },
+  function () { console.log('bottom view clicked'); }
+];
+
+const viewMesh = [];
 const loadManager = new THREE.LoadingManager();
 const loader = new THREE.TextureLoader(loadManager);
 
@@ -147,29 +166,31 @@ const materials = [
 
 materials[0].map.center.set(.5, .5);
 materials[0].map.rotation = THREE.Math.degToRad(90);
-materials[0].map.side = THREE.DoubleSide;
-materials[0].map.transparent = true;
 materials[1].map.center.set(.5, .5);
 materials[1].map.rotation = THREE.Math.degToRad(-90);
-materials[1].map.side = THREE.DoubleSide;
-materials[1].map.transparent = true;
 materials[2].map.center.set(.5, .5);
 materials[2].map.rotation = THREE.Math.degToRad(180);
-materials[2].map.side = THREE.DoubleSide;
-materials[2].map.transparent = true;
-materials[3].map.side = THREE.DoubleSide;
-materials[3].map.transparent = true;
-materials[4].map.side = THREE.DoubleSide;
-materials[4].map.transparent = true;
 materials[5].map.center.set(.5, .5);
 materials[5].map.rotation = THREE.Math.degToRad(180);
-materials[5].map.side = THREE.DoubleSide;
-materials[5].map.transparent = true;
 
+const clickCallbacksByUUID = {};
 loadManager.onLoad = () => {
-  const cube = new THREE.Mesh(axesGeometry, materials);
-  scene.add(cube);
-  cubes.push(cube);  // add to our list of cubes to rotate
+  // const cube = new THREE.Mesh(axesGeometry, materials);
+  // scene.add(cube);
+  // cubes.push(cube);  // add to our list of cubes to rotate
+  for (var i = 0; i < materials.length; i++) {
+    materials[i].side = THREE.DoubleSide;
+    materials[i].transparent = true;
+    viewMesh[i] = new THREE.Mesh(viewPlanes[i], materials[i]);
+    viewMesh[i].position.x = viewPositions[i][0];
+    viewMesh[i].position.y = viewPositions[i][1];
+    viewMesh[i].position.z = viewPositions[i][2];
+    viewMesh[i].rotation.x = viewRotations[i][0];
+    viewMesh[i].rotation.y = viewRotations[i][1];
+    viewMesh[i].rotation.z = viewRotations[i][2];
+    clickCallbacksByUUID[viewMesh[i].uuid] = viewCallbacks[i];
+    scene.add(viewMesh[i]);
+  }
 };
 
 // Axis labels:
@@ -249,13 +270,13 @@ function onCanvasClick(evt) {
   var intersects = getIntersects(onClickPosition, scene.children);
   if (intersects.length > 0 && intersects[0].uv) {
     var intersect = intersects[0];
-    for (var i = 0; i < intersect.object.material.length; i++) {
-      var uv = intersect.uv;
-      intersect.object.material[i].map.transformUv(uv);
-      // canvas.setCrossPosition(uv.x, uv.y);
-      console.log(uv);
+    var clickCallback = clickCallbacksByUUID[intersect.object.uuid];
+    if (clickCallback) {
+      clickCallback();
+      return false;
     }
   }
+  return true;
 }
 function onCanvasResize() {
   console.log('onCanvasResize: (' + canvas.width.toString() + ',' + canvas.height.toString() + ')');
