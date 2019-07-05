@@ -108,16 +108,62 @@ var camera = new THREE.PerspectiveCamera(45, aspectRatio, 0.1, 1000);
 var renderer = new THREE.WebGLRenderer({ canvas: canvas, context: gl });
 renderer.setSize(canvas.width, canvas.height);
 
-var geometry = new THREE.BoxGeometry(1, 1, 1);
-var material = new THREE.ShaderMaterial({ vertexShader: vs, fragmentShader: fs });
-var cube = new THREE.Mesh(geometry, material);
-scene.add(cube);
+const light = new THREE.DirectionalLight(0xFFFFFF, 1);
+light.position.set(-1, 2, 4);
+scene.add(light);
+
+// var geometry = new THREE.BoxGeometry(1, 1, 1);
+// var material = new THREE.ShaderMaterial({ vertexShader: vs, fragmentShader: fs });
+// var cube = new THREE.Mesh(geometry, material);
+// scene.add(cube);
+
+var axesHelper = new THREE.AxesHelper(5);
+scene.add(axesHelper);
+
+// var gimbleMaterial = new THREE.SpriteMaterial({ useScreenCoordinates: true, alignment: THREE.SpriteAlignment.topRight });
+// var sprite = new THREE.Sprite(gimbleMaterial);
+// sprite.position.set(50, 50, 0);
+// sprite.scale.set(64, 64, 1.0); // imageWidth, imageHeight
+// scene.add(sprite);
+
+const boxWidth = 1;
+const boxHeight = 1;
+const boxDepth = 1;
+const axesGeometry = new THREE.BoxBufferGeometry(boxWidth, boxHeight, boxDepth);
+
+const cubes = [];  // just an array we can use to rotate the cubes
+const loadManager = new THREE.LoadingManager();
+const loader = new THREE.TextureLoader(loadManager);
+
+const materials = [
+  new THREE.MeshBasicMaterial({ map: loader.load('images/right.png') }),
+  new THREE.MeshBasicMaterial({ map: loader.load('images/left.png') }),
+  new THREE.MeshBasicMaterial({ map: loader.load('images/back.png') }),
+  new THREE.MeshBasicMaterial({ map: loader.load('images/front.png') }),
+  new THREE.MeshBasicMaterial({ map: loader.load('images/top.png') }),
+  new THREE.MeshBasicMaterial({ map: loader.load('images/bottom.png') }),
+];
+
+materials[0].map.center.set(.5, .5);
+materials[0].map.rotation = THREE.Math.degToRad(90);
+materials[1].map.center.set(.5, .5);
+materials[1].map.rotation = THREE.Math.degToRad(-90);
+materials[2].map.center.set(.5, .5);
+materials[2].map.rotation = THREE.Math.degToRad(180);
+materials[5].map.center.set(.5, .5);
+materials[5].map.rotation = THREE.Math.degToRad(180);
+
+loadManager.onLoad = () => {
+  const cube = new THREE.Mesh(axesGeometry, materials);
+  scene.add(cube);
+  cubes.push(cube);  // add to our list of cubes to rotate
+};
 
 camera.position.z = 5;
 
 var controls = new THREE.TrackballControls(camera, canvas);
 
-controls.rotateSpeed = 1.0;
+controls.rotateSpeed = 2.0;
 controls.zoomSpeed = 1.2;
 controls.panSpeed = 0.8;
 
