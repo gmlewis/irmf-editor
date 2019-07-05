@@ -143,12 +143,12 @@ const viewPositions = [[0.5, 0, 0], [-0.5, 0, 0], [0, 0.5, 0], [0, -0.5, 0], [0,
 const halfPi = 0.5 * Math.PI;
 const viewRotations = [[0, halfPi, 0], [0, -halfPi, 0], [-halfPi, 0, 0], [halfPi, 0, 0], [0, 0, 0], [Math.PI, 0, Math.PI]];
 const viewCallbacks = [
-  function () { console.log('right view clicked'); },
-  function () { console.log('left view clicked'); },
-  function () { console.log('back view clicked'); },
-  function () { console.log('front view clicked'); },
-  function () { console.log('top view clicked'); },
-  function () { console.log('bottom view clicked'); }
+  function () { controls.position0.set(5, 0, 0); controls.up0.set(0, 0, 1); controls.reset(); },
+  function () { controls.position0.set(-5, 0, 0); controls.up0.set(0, 0, 1); controls.reset(); },
+  function () { controls.position0.set(0, 5, 0); controls.up0.set(0, 0, 1); controls.reset(); },
+  function () { controls.position0.set(0, -5, 0); controls.up0.set(0, 0, 1); controls.reset(); },
+  function () { controls.position0.set(0, 0, 5); controls.up0.set(0, 1, 0); controls.reset(); },
+  function () { controls.position0.set(0, 0, -5); controls.up0.set(0, -1, 0); controls.reset(); }
 ];
 
 const viewMesh = [];
@@ -264,12 +264,18 @@ var getIntersects = function (point, objects) {
   return raycaster.intersectObjects(objects);
 };
 function onCanvasClick(evt) {
+  const uvMargin = 0.1;
   evt.preventDefault();
   var array = getMousePosition(canvas, evt.clientX, evt.clientY);
   onClickPosition.fromArray(array);
   var intersects = getIntersects(onClickPosition, scene.children);
   if (intersects.length > 0 && intersects[0].uv) {
     var intersect = intersects[0];
+    if (intersect.uv[0] <= uvMargin || intersect.uv[0] >= (1.0 - uvMargin) ||
+      intersect.uv[1] <= uvMargin || intersect.uv[1] >= (1.0 - uvMargin)) {
+      // TODO: corner-checks for angled views would go here.
+      return true;
+    }
     var clickCallback = clickCallbacksByUUID[intersect.object.uuid];
     if (clickCallback) {
       clickCallback();
