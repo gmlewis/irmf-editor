@@ -226,9 +226,37 @@ controls.keys = [65, 83, 68];
 
 controls.addEventListener('change', render);
 canvas.addEventListener('resize', onCanvasResize, false);
+canvas.addEventListener('click', onCanvasClick, false);
 onCanvasResize();
 animate();
 
+var raycaster = new THREE.Raycaster();
+var mouse = new THREE.Vector2();
+var onClickPosition = new THREE.Vector2();
+var getMousePosition = function (dom, x, y) {
+  var rect = dom.getBoundingClientRect();
+  return [(x - rect.left) / rect.width, (y - rect.top) / rect.height];
+};
+var getIntersects = function (point, objects) {
+  mouse.set((point.x * 2) - 1, - (point.y * 2) + 1);
+  raycaster.setFromCamera(mouse, camera);
+  return raycaster.intersectObjects(objects);
+};
+function onCanvasClick(evt) {
+  evt.preventDefault();
+  var array = getMousePosition(canvas, evt.clientX, evt.clientY);
+  onClickPosition.fromArray(array);
+  var intersects = getIntersects(onClickPosition, scene.children);
+  if (intersects.length > 0 && intersects[0].uv) {
+    var intersect = intersects[0];
+    for (var i = 0; i < intersect.object.material.length; i++) {
+      var uv = intersect.uv;
+      intersect.object.material[i].map.transformUv(uv);
+      // canvas.setCrossPosition(uv.x, uv.y);
+      console.log(uv);
+    }
+  }
+}
 function onCanvasResize() {
   console.log('onCanvasResize: (' + canvas.width.toString() + ',' + canvas.height.toString() + ')');
   camera.aspect = canvas.width / canvas.height;
