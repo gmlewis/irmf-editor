@@ -138,17 +138,29 @@ const backView = new THREE.PlaneGeometry(1, 1);
 const frontView = new THREE.PlaneGeometry(1, 1);
 const topView = new THREE.PlaneGeometry(1, 1);
 const bottomView = new THREE.PlaneGeometry(1, 1);
-const viewPlanes = [rightView, leftView, backView, frontView, topView, bottomView];
-const viewPositions = [[0.5, 0, 0], [-0.5, 0, 0], [0, 0.5, 0], [0, -0.5, 0], [0, 0, 0.5], [0, 0, -0.5]];
+const frontRightTopView = new THREE.CircleBufferGeometry(0.1, 32);
+const rightBackTopView = new THREE.CircleBufferGeometry(0.1, 32);
+const backLeftTopView = new THREE.CircleBufferGeometry(0.1, 32);
+const leftFrontTopView = new THREE.CircleBufferGeometry(0.1, 32);
+const viewPlanes = [rightView, leftView, backView, frontView, topView, bottomView,
+  frontRightTopView, rightBackTopView, backLeftTopView, leftFrontTopView];
+const viewPositions = [[0.5, 0, 0], [-0.5, 0, 0], [0, 0.5, 0], [0, -0.5, 0], [0, 0, 0.5], [0, 0, -0.5],
+[0.4, -0.4, 0.4], [0.4, 0.4, 0.4], [-0.4, 0.4, 0.4], [-0.4, -0.4, 0.4]];
 const halfPi = 0.5 * Math.PI;
-const viewRotations = [[0, halfPi, 0], [0, -halfPi, 0], [-halfPi, 0, 0], [halfPi, 0, 0], [0, 0, 0], [Math.PI, 0, Math.PI]];
+const quarterPi = 0.25 * Math.PI;
+const viewRotations = [[0, halfPi, 0], [0, -halfPi, 0], [-halfPi, 0, 0], [halfPi, 0, 0], [0, 0, 0], [Math.PI, 0, Math.PI],
+[quarterPi, 0, quarterPi, 'ZYX'], [-quarterPi, 0, -quarterPi, 'ZYX'], [-quarterPi, 0, quarterPi, 'ZYX'], [quarterPi, 0, -quarterPi, 'ZYX']];
 const viewCallbacks = [
   function () { controls.position0.set(5, 0, 0); controls.up0.set(0, 0, 1); controls.reset(); },
   function () { controls.position0.set(-5, 0, 0); controls.up0.set(0, 0, 1); controls.reset(); },
   function () { controls.position0.set(0, 5, 0); controls.up0.set(0, 0, 1); controls.reset(); },
   function () { controls.position0.set(0, -5, 0); controls.up0.set(0, 0, 1); controls.reset(); },
   function () { controls.position0.set(0, 0, 5); controls.up0.set(0, 1, 0); controls.reset(); },
-  function () { controls.position0.set(0, 0, -5); controls.up0.set(0, -1, 0); controls.reset(); }
+  function () { controls.position0.set(0, 0, -5); controls.up0.set(0, -1, 0); controls.reset(); },
+  function () { controls.position0.set(3, -3, 3); controls.up0.set(0, 0, 1); controls.reset(); },
+  function () { controls.position0.set(3, 3, 3); controls.up0.set(0, 0, 1); controls.reset(); },
+  function () { controls.position0.set(-3, 3, 3); controls.up0.set(0, 0, 1); controls.reset(); },
+  function () { controls.position0.set(-3, -3, 3); controls.up0.set(0, 0, 1); controls.reset(); }
 ];
 
 const viewMesh = [];
@@ -162,6 +174,10 @@ const materials = [
   new THREE.MeshBasicMaterial({ map: loader.load('images/front.png') }),
   new THREE.MeshBasicMaterial({ map: loader.load('images/top.png') }),
   new THREE.MeshBasicMaterial({ map: loader.load('images/bottom.png') }),
+  new THREE.MeshBasicMaterial({ color: 0xffff00 }),
+  new THREE.MeshBasicMaterial({ color: 0xffff00 }),
+  new THREE.MeshBasicMaterial({ color: 0xffff00 }),
+  new THREE.MeshBasicMaterial({ color: 0xffff00 }),
 ];
 
 materials[0].map.center.set(.5, .5);
@@ -185,9 +201,15 @@ loadManager.onLoad = () => {
     viewMesh[i].position.x = viewPositions[i][0];
     viewMesh[i].position.y = viewPositions[i][1];
     viewMesh[i].position.z = viewPositions[i][2];
-    viewMesh[i].rotation.x = viewRotations[i][0];
-    viewMesh[i].rotation.y = viewRotations[i][1];
-    viewMesh[i].rotation.z = viewRotations[i][2];
+    if (viewRotations[i].length == 3) {
+      viewMesh[i].rotation.x = viewRotations[i][0];
+      viewMesh[i].rotation.y = viewRotations[i][1];
+      viewMesh[i].rotation.z = viewRotations[i][2];
+    } else {
+      const params = viewRotations[i];
+      const euler = new THREE.Euler(params[0], params[1], params[2], params[3]);
+      viewMesh[i].setRotationFromEuler(euler);
+    }
     clickCallbacksByUUID[viewMesh[i].uuid] = viewCallbacks[i];
     scene.add(viewMesh[i]);
   }
@@ -273,7 +295,15 @@ function onCanvasClick(evt) {
     var intersect = intersects[0];
     if (intersect.uv[0] <= uvMargin || intersect.uv[0] >= (1.0 - uvMargin) ||
       intersect.uv[1] <= uvMargin || intersect.uv[1] >= (1.0 - uvMargin)) {
-      // TODO: corner-checks for angled views would go here.
+      // corner-checks for angled views go here.
+      if (intersects.length > 1) {
+        intersect = intersects[1];
+        var clickCallback = clickCallbacksByUUID[intersect.object.uuid];
+        if (clickCallback) {
+          clickCallback();
+          return false;
+        }
+      }
       return true;
     }
     var clickCallback = clickCallbacksByUUID[intersect.object.uuid];
