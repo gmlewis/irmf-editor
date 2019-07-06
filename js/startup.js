@@ -136,8 +136,16 @@ scene.add(axesHelper);
 // const boxHeight = 1;
 // const boxDepth = 1;
 // const axesGeometry = new THREE.BoxBufferGeometry(boxWidth, boxHeight, boxDepth);
+// const filletBox = function (size, fillet) {
+//   var verts = [new THREE.Vector2(-0.5 * size, -0.5 * size)];
+//   for (var ang = 0; ang < 2 * Math.PI; ang += 0.1) {
+//     verts.push(new THREE.Vector2(size * 0.5 * Math.cos(ang), size * 0.5 * Math.sin(ang)));
+//   }
+//   return new THREE.Shape(verts);
+// }
 
-const viewPlane = new THREE.PlaneGeometry(0.8, 0.8);
+// const viewPlane = new THREE.ShapeGeometry(filletBox(0.8, 0.25));
+const viewPlane = new THREE.CircleBufferGeometry(0.4, 32);
 const viewCircle = new THREE.CircleBufferGeometry(0.1, 32);
 const viewPlanes = [viewPlane, viewPlane, viewPlane, viewPlane, viewPlane, viewPlane,
   viewCircle, viewCircle, viewCircle, viewCircle,
