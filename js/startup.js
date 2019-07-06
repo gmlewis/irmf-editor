@@ -132,23 +132,11 @@ scene.add(axesHelper);
 // const boxDepth = 1;
 // const axesGeometry = new THREE.BoxBufferGeometry(boxWidth, boxHeight, boxDepth);
 
-const rightView = new THREE.PlaneGeometry(1, 1);
-const leftView = new THREE.PlaneGeometry(1, 1);
-const backView = new THREE.PlaneGeometry(1, 1);
-const frontView = new THREE.PlaneGeometry(1, 1);
-const topView = new THREE.PlaneGeometry(1, 1);
-const bottomView = new THREE.PlaneGeometry(1, 1);
-const frontRightTopView = new THREE.CircleBufferGeometry(0.1, 32);
-const rightBackTopView = new THREE.CircleBufferGeometry(0.1, 32);
-const backLeftTopView = new THREE.CircleBufferGeometry(0.1, 32);
-const leftFrontTopView = new THREE.CircleBufferGeometry(0.1, 32);
-const frontRightBottomView = new THREE.CircleBufferGeometry(0.1, 32);
-const rightBackBottomView = new THREE.CircleBufferGeometry(0.1, 32);
-const backLeftBottomView = new THREE.CircleBufferGeometry(0.1, 32);
-const leftFrontBottomView = new THREE.CircleBufferGeometry(0.1, 32);
-const viewPlanes = [rightView, leftView, backView, frontView, topView, bottomView,
-  frontRightTopView, rightBackTopView, backLeftTopView, leftFrontTopView,
-  frontRightBottomView, rightBackBottomView, backLeftBottomView, leftFrontBottomView];
+const viewPlane = new THREE.PlaneGeometry(0.8, 0.8);
+const viewCircle = new THREE.CircleBufferGeometry(0.1, 32);
+const viewPlanes = [viewPlane, viewPlane, viewPlane, viewPlane, viewPlane, viewPlane,
+  viewCircle, viewCircle, viewCircle, viewCircle,
+  viewCircle, viewCircle, viewCircle, viewCircle];
 const viewPositions = [[0.5, 0, 0], [-0.5, 0, 0], [0, 0.5, 0], [0, -0.5, 0], [0, 0, 0.5], [0, 0, -0.5],
 [0.4, -0.4, 0.4], [0.4, 0.4, 0.4], [-0.4, 0.4, 0.4], [-0.4, -0.4, 0.4],
 [0.4, -0.4, -0.4], [0.4, 0.4, -0.4], [-0.4, 0.4, -0.4], [-0.4, -0.4, -0.4]];
@@ -308,19 +296,6 @@ function onCanvasClick(evt) {
   var intersects = getIntersects(onClickPosition, scene.children);
   if (intersects.length > 0 && intersects[0].uv) {
     var intersect = intersects[0];
-    if (intersect.uv[0] <= uvMargin || intersect.uv[0] >= (1.0 - uvMargin) ||
-      intersect.uv[1] <= uvMargin || intersect.uv[1] >= (1.0 - uvMargin)) {
-      // corner-checks for angled views go here.
-      if (intersects.length > 1) {
-        intersect = intersects[1];
-        var clickCallback = clickCallbacksByUUID[intersect.object.uuid];
-        if (clickCallback) {
-          clickCallback();
-          return false;
-        }
-      }
-      return true;
-    }
     var clickCallback = clickCallbacksByUUID[intersect.object.uuid];
     if (clickCallback) {
       clickCallback();
