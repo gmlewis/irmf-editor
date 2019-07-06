@@ -103,7 +103,12 @@ void main() {
 var scene = new THREE.Scene();
 var aspectRatio = canvas.width / canvas.height;
 console.log('canvas: (' + canvas.width.toString() + ',' + canvas.height.toString() + '), aspectRatio=' + aspectRatio.toString());
-var camera = new THREE.PerspectiveCamera(45, aspectRatio, 0.1, 1000);
+var activeCamera = new THREE.PerspectiveCamera(45, aspectRatio, 0.1, 1000);
+var cameraPerspective = new THREE.PerspectiveCamera(45, aspectRatio, 0.1, 1000);
+var frustumSize = 10;
+var cameraOrthographic = new THREE.OrthographicCamera(
+  0.5 * frustumSize * aspectRatio / - 2, 0.5 * frustumSize * aspectRatio / 2, frustumSize / 2, frustumSize / - 2, 1, 10);
+// activeCamera = cameraOrthographic;  // DEBUG
 
 var renderer = new THREE.WebGLRenderer({ canvas: canvas, context: gl });
 renderer.setSize(canvas.width, canvas.height);
@@ -146,20 +151,20 @@ const viewRotations = [[0, halfPi, 0], [0, -halfPi, 0], [-halfPi, 0, 0], [halfPi
 [quarterPi, 0, quarterPi, 'ZYX'], [-quarterPi, 0, -quarterPi, 'ZYX'], [-quarterPi, 0, quarterPi, 'ZYX'], [quarterPi, 0, -quarterPi, 'ZYX'],
 [-quarterPi, 0, quarterPi, 'ZYX'], [quarterPi, 0, -quarterPi, 'ZYX'], [quarterPi, 0, quarterPi, 'ZYX'], [-quarterPi, 0, -quarterPi, 'ZYX']];
 const viewCallbacks = [
-  function () { controls.position0.set(5, 0, 0); controls.up0.set(0, 0, 1); controls.reset(); },
-  function () { controls.position0.set(-5, 0, 0); controls.up0.set(0, 0, 1); controls.reset(); },
-  function () { controls.position0.set(0, 5, 0); controls.up0.set(0, 0, 1); controls.reset(); },
-  function () { controls.position0.set(0, -5, 0); controls.up0.set(0, 0, 1); controls.reset(); },
-  function () { controls.position0.set(0, 0, 5); controls.up0.set(0, 1, 0); controls.reset(); },
-  function () { controls.position0.set(0, 0, -5); controls.up0.set(0, -1, 0); controls.reset(); },
-  function () { controls.position0.set(3, -3, 3); controls.up0.set(0, 0, 1); controls.reset(); },
-  function () { controls.position0.set(3, 3, 3); controls.up0.set(0, 0, 1); controls.reset(); },
-  function () { controls.position0.set(-3, 3, 3); controls.up0.set(0, 0, 1); controls.reset(); },
-  function () { controls.position0.set(-3, -3, 3); controls.up0.set(0, 0, 1); controls.reset(); },
-  function () { controls.position0.set(3, -3, -3); controls.up0.set(0, 0, 1); controls.reset(); },
-  function () { controls.position0.set(3, 3, -3); controls.up0.set(0, 0, 1); controls.reset(); },
-  function () { controls.position0.set(-3, 3, -3); controls.up0.set(0, 0, 1); controls.reset(); },
-  function () { controls.position0.set(-3, -3, -3); controls.up0.set(0, 0, 1); controls.reset(); }
+  function () { toOrtho(); controls.position0.set(5, 0, 0); controls.up0.set(0, 0, 1); controls.reset(); },
+  function () { toOrtho(); controls.position0.set(-5, 0, 0); controls.up0.set(0, 0, 1); controls.reset(); },
+  function () { toOrtho(); controls.position0.set(0, 5, 0); controls.up0.set(0, 0, 1); controls.reset(); },
+  function () { toOrtho(); controls.position0.set(0, -5, 0); controls.up0.set(0, 0, 1); controls.reset(); },
+  function () { toOrtho(); controls.position0.set(0, 0, 5); controls.up0.set(0, 1, 0); controls.reset(); },
+  function () { toOrtho(); controls.position0.set(0, 0, -5); controls.up0.set(0, -1, 0); controls.reset(); },
+  function () { toPersp(); controls.position0.set(3, -3, 3); controls.up0.set(0, 0, 1); controls.reset(); },
+  function () { toPersp(); controls.position0.set(3, 3, 3); controls.up0.set(0, 0, 1); controls.reset(); },
+  function () { toPersp(); controls.position0.set(-3, 3, 3); controls.up0.set(0, 0, 1); controls.reset(); },
+  function () { toPersp(); controls.position0.set(-3, -3, 3); controls.up0.set(0, 0, 1); controls.reset(); },
+  function () { toPersp(); controls.position0.set(3, -3, -3); controls.up0.set(0, 0, 1); controls.reset(); },
+  function () { toPersp(); controls.position0.set(3, 3, -3); controls.up0.set(0, 0, 1); controls.reset(); },
+  function () { toPersp(); controls.position0.set(-3, 3, -3); controls.up0.set(0, 0, 1); controls.reset(); },
+  function () { toPersp(); controls.position0.set(-3, -3, -3); controls.up0.set(0, 0, 1); controls.reset(); }
 ];
 
 const viewMesh = [];
@@ -249,14 +254,27 @@ var labels_z = axisLabels(labels_data_z, { 'z': 1 }, [0, 0, axisOffset],
 scene.add(labels_z);
 
 // Isometric view on startup:
-camera.position.x = 3;
-camera.position.y = -3;
-camera.position.z = 3;
-camera.up.y = 0;
-camera.up.z = 1;
-camera.lookAt([0, 0, 0]);
+activeCamera.position.x = 3;
+activeCamera.position.y = -3;
+activeCamera.position.z = 3;
+activeCamera.up.y = 0;
+activeCamera.up.z = 1;
+activeCamera.lookAt([0, 0, 0]);
+// Initialize cameras on startup:
+cameraPerspective.position.x = 3;
+cameraPerspective.position.y = -3;
+cameraPerspective.position.z = 3;
+cameraPerspective.up.y = 0;
+cameraPerspective.up.z = 1;
+cameraPerspective.lookAt([0, 0, 0]);
+cameraOrthographic.position.x = 0;
+cameraOrthographic.position.y = -3;
+cameraOrthographic.position.z = 0;
+cameraOrthographic.up.y = 0;
+cameraOrthographic.up.z = 1;
+cameraOrthographic.lookAt([0, 0, 0]);
 
-var controls = new THREE.TrackballControls(camera, canvas);
+var controls = new THREE.TrackballControls(activeCamera, canvas);
 
 controls.rotateSpeed = 2.0;
 controls.zoomSpeed = 1.2;
@@ -276,6 +294,16 @@ canvas.addEventListener('click', onCanvasClick, false);
 onCanvasResize();
 animate();
 
+function toOrtho() {
+  // TODO: Fix this.
+  // activeCamera = cameraOrthographic;
+  // activeCamera.update();
+}
+function toPersp() {
+  // activeCamera = cameraPerspective;
+  // activeCamera.update();
+}
+
 var raycaster = new THREE.Raycaster();
 var mouse = new THREE.Vector2();
 var onClickPosition = new THREE.Vector2();
@@ -285,7 +313,7 @@ var getMousePosition = function (dom, x, y) {
 };
 var getIntersects = function (point, objects) {
   mouse.set((point.x * 2) - 1, - (point.y * 2) + 1);
-  raycaster.setFromCamera(mouse, camera);
+  raycaster.setFromCamera(mouse, activeCamera);
   return raycaster.intersectObjects(objects);
 };
 function onCanvasClick(evt) {
@@ -306,8 +334,8 @@ function onCanvasClick(evt) {
 }
 function onCanvasResize() {
   console.log('onCanvasResize: (' + canvas.width.toString() + ',' + canvas.height.toString() + ')');
-  camera.aspect = canvas.width / canvas.height;
-  camera.updateProjectionMatrix();
+  activeCamera.aspect = canvas.width / canvas.height;
+  activeCamera.updateProjectionMatrix();
   renderer.setSize(canvas.width, canvas.height);
   controls.handleResize();
   render();
@@ -317,5 +345,5 @@ function animate() {
   controls.update();
 }
 function render() {
-  renderer.render(scene, camera);
+  renderer.render(scene, activeCamera);
 }
