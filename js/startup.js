@@ -104,12 +104,11 @@ void main() {
 const scene = new THREE.Scene();
 let aspectRatio = canvas.width / canvas.height;
 console.log('canvas: (' + canvas.width.toString() + ',' + canvas.height.toString() + '), aspectRatio=' + aspectRatio.toString());
-let activeCamera = new THREE.PerspectiveCamera(45, aspectRatio, 0.1, 1000);
+let activeCamera = null;
 let cameraPerspective = new THREE.PerspectiveCamera(45, aspectRatio, 0.1, 1000);
-let frustumSize = 10;
+let frustumSize = 2.;
 let cameraOrthographic = new THREE.OrthographicCamera(
-  0.5 * frustumSize * aspectRatio / - 2, 0.5 * frustumSize * aspectRatio / 2, frustumSize / 2, frustumSize / - 2, 1, 10);
-// activeCamera = cameraOrthographic;  // DEBUG
+  -aspectRatio * frustumSize, aspectRatio * frustumSize, frustumSize, -frustumSize, 1, 10);
 
 let renderer = new THREE.WebGLRenderer({ canvas: canvas, context: gl });
 renderer.setSize(canvas.width, canvas.height);
@@ -265,13 +264,6 @@ hud.add(labels_z);
 
 scene.add(hud);
 
-// Isometric view on startup:
-activeCamera.position.x = 3;
-activeCamera.position.y = -3;
-activeCamera.position.z = 3;
-activeCamera.up.y = 0;
-activeCamera.up.z = 1;
-activeCamera.lookAt([0, 0, 0]);
 // Initialize cameras on startup:
 cameraPerspective.position.x = 3;
 cameraPerspective.position.y = -3;
@@ -279,8 +271,9 @@ cameraPerspective.position.z = 3;
 cameraPerspective.up.y = 0;
 cameraPerspective.up.z = 1;
 cameraPerspective.lookAt([0, 0, 0]);
+activeCamera = cameraPerspective;
 cameraOrthographic.position.x = 0;
-cameraOrthographic.position.y = -3;
+cameraOrthographic.position.y = -2;
 cameraOrthographic.position.z = 0;
 cameraOrthographic.up.y = 0;
 cameraOrthographic.up.z = 1;
@@ -307,13 +300,12 @@ onCanvasResize();
 animate();
 
 function toOrtho() {
-  // TODO: Fix this.
-  // activeCamera = cameraOrthographic;
-  // activeCamera.update();
+  activeCamera = cameraOrthographic;
+  controls.object = activeCamera;
 }
 function toPersp() {
-  // activeCamera = cameraPerspective;
-  // activeCamera.update();
+  activeCamera = cameraPerspective;
+  controls.object = activeCamera;
 }
 
 let raycaster = new THREE.Raycaster();
@@ -344,9 +336,14 @@ function onCanvasClick(evt) {
   return true;
 }
 function onCanvasResize() {
-  console.log('onCanvasResize: (' + canvas.width.toString() + ',' + canvas.height.toString() + ')');
-  activeCamera.aspect = canvas.width / canvas.height;
-  activeCamera.updateProjectionMatrix();
+  const aspectRatio = canvas.width / canvas.height;
+  cameraOrthographic.left = -aspectRatio * frustumSize;
+  cameraOrthographic.right = aspectRatio * frustumSize;
+  cameraOrthographic.top = frustumSize;
+  cameraOrthographic.bottom = -frustumSize;
+  cameraOrthographic.updateProjectionMatrix();
+  cameraPerspective.aspect = aspectRatio;
+  cameraPerspective.updateProjectionMatrix();
   renderer.setSize(canvas.width, canvas.height);
   controls.handleResize();
   render();
@@ -356,13 +353,13 @@ function animate() {
   controls.update();
 }
 function render() {
-  let activeCameraWorldDirection = new THREE.Vector3();
-  activeCamera.getWorldDirection(activeCameraWorldDirection);
-  console.log(activeCameraWorldDirection);
-  activeCameraWorldDirection.multiplyScalar(10);
-  let newPosition = new THREE.Vector3().addVectors(activeCamera.position, activeCameraWorldDirection);
-  console.log(newPosition);
-  hud.position.copy(newPosition);
+  // let activeCameraWorldDirection = new THREE.Vector3();
+  // activeCamera.getWorldDirection(activeCameraWorldDirection);
+  // console.log(activeCameraWorldDirection);
+  // activeCameraWorldDirection.multiplyScalar(10);
+  // let newPosition = new THREE.Vector3().addVectors(activeCamera.position, activeCameraWorldDirection);
+  // console.log(newPosition);
+  // hud.position.copy(newPosition);
   // hud.quaternion.copy(activeCamera.quaternion);
   renderer.render(scene, activeCamera);
 }
