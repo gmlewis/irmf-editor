@@ -1,4 +1,5 @@
-"use strict";
+'use strict';
+/* global THREE */
 
 // Split panels...
 
@@ -7,8 +8,8 @@ const twoDiv = document.getElementById('two');
 
 // Get A WebGL context
 /** @type {HTMLCanvasElement} */
-const canvas = document.getElementById("canvas");
-const gl = canvas.getContext("webgl2");
+const canvas = document.getElementById('canvas');
+const gl = canvas.getContext('webgl2');
 if (!gl) {
   console.log('Browser does not support WebGL2!');
 }
@@ -32,14 +33,14 @@ window.MonacoEnvironment = {
   }
 };
 
-var compileShader = function () {
+const compileShader = function () {
   console.log('TODO: Compile shader.');
 };
-var renderModel = function () {
+const renderModel = function () {
   console.log('TODO: Render model.');
 };
 
-var editor = null;
+let editor = null;
 require(["vs/editor/editor.main"], function () {
   monaco.editor.defineTheme('myCustomTheme', {
     base: 'vs-dark', // can also be vs or hc-black
@@ -74,7 +75,7 @@ require(["vs/editor/editor.main"], function () {
   editor.updateOptions({ wordWrap: "on" });
 
   // Add Ctrl/Cmd-Enter to render updated model:
-  var myBinding = editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, renderModel);
+  const myBinding = editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, renderModel);
 
   console.log('editor started');
   function twoDivResized() {
@@ -88,11 +89,11 @@ require(["vs/editor/editor.main"], function () {
 
 // Rendering...
 
-var vs = `#version 300 es
+let vs = `#version 300 es
 void main() {
   gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );
 }`;
-var fs = `#version 300 es
+let fs = `#version 300 es
 precision highp float;
 precision highp int;
 out vec4 out_FragColor;
@@ -100,36 +101,36 @@ void main() {
   out_FragColor = vec4( 1.0 );
 }`;
 
-var scene = new THREE.Scene();
-var aspectRatio = canvas.width / canvas.height;
+const scene = new THREE.Scene();
+let aspectRatio = canvas.width / canvas.height;
 console.log('canvas: (' + canvas.width.toString() + ',' + canvas.height.toString() + '), aspectRatio=' + aspectRatio.toString());
-var activeCamera = new THREE.PerspectiveCamera(45, aspectRatio, 0.1, 1000);
-var cameraPerspective = new THREE.PerspectiveCamera(45, aspectRatio, 0.1, 1000);
-var frustumSize = 10;
-var cameraOrthographic = new THREE.OrthographicCamera(
+let activeCamera = new THREE.PerspectiveCamera(45, aspectRatio, 0.1, 1000);
+let cameraPerspective = new THREE.PerspectiveCamera(45, aspectRatio, 0.1, 1000);
+let frustumSize = 10;
+let cameraOrthographic = new THREE.OrthographicCamera(
   0.5 * frustumSize * aspectRatio / - 2, 0.5 * frustumSize * aspectRatio / 2, frustumSize / 2, frustumSize / - 2, 1, 10);
 // activeCamera = cameraOrthographic;  // DEBUG
 
-var renderer = new THREE.WebGLRenderer({ canvas: canvas, context: gl });
+let renderer = new THREE.WebGLRenderer({ canvas: canvas, context: gl });
 renderer.setSize(canvas.width, canvas.height);
 
 const light = new THREE.DirectionalLight(0xFFFFFF, 1);
 light.position.set(-1, 2, 4);
 scene.add(light);
 
-// var geometry = new THREE.BoxGeometry(1, 1, 1);
-// var material = new THREE.ShaderMaterial({ vertexShader: vs, fragmentShader: fs });
-// var cube = new THREE.Mesh(geometry, material);
+// let geometry = new THREE.BoxGeometry(1, 1, 1);
+// let material = new THREE.ShaderMaterial({ vertexShader: vs, fragmentShader: fs });
+// let cube = new THREE.Mesh(geometry, material);
 // scene.add(cube);
 
 const hud = new THREE.Object3D();
 
 const axisLength = 1.0;
-var axesHelper = new THREE.AxesHelper(axisLength);
+let axesHelper = new THREE.AxesHelper(axisLength);
 hud.add(axesHelper);
 
-// var gimbleMaterial = new THREE.SpriteMaterial({ useScreenCoordinates: true, alignment: THREE.SpriteAlignment.topRight });
-// var sprite = new THREE.Sprite(gimbleMaterial);
+// let gimbleMaterial = new THREE.SpriteMaterial({ useScreenCoordinates: true, alignment: THREE.SpriteAlignment.topRight });
+// let sprite = new THREE.Sprite(gimbleMaterial);
 // sprite.position.set(50, 50, 0);
 // sprite.scale.set(64, 64, 1.0); // imageWidth, imageHeight
 // scene.add(sprite);
@@ -139,8 +140,8 @@ hud.add(axesHelper);
 // const boxDepth = 1;
 // const axesGeometry = new THREE.BoxBufferGeometry(boxWidth, boxHeight, boxDepth);
 // const filletBox = function (size, fillet) {
-//   var verts = [new THREE.Vector2(-0.5 * size, -0.5 * size)];
-//   for (var ang = 0; ang < 2 * Math.PI; ang += 0.1) {
+//   let verts = [new THREE.Vector2(-0.5 * size, -0.5 * size)];
+//   for (let ang = 0; ang < 2 * Math.PI; ang += 0.1) {
 //     verts.push(new THREE.Vector2(size * 0.5 * Math.cos(ang), size * 0.5 * Math.sin(ang)));
 //   }
 //   return new THREE.Shape(verts);
@@ -180,15 +181,15 @@ const viewCallbacks = [
 const viewMesh = [];
 const loadManager = new THREE.LoadingManager();
 const loader = new THREE.TextureLoader(loadManager);
-const circleMaterial = new THREE.MeshBasicMaterial({ color: 0xffff00, side: THREE.DoubleSide, transparent: true });
+const circleMaterial = new THREE.MeshBasicMaterial({ color: 0xffff00, side: THREE.DoubleSide, transparent: false });
 
 const materials = [
-  new THREE.MeshBasicMaterial({ map: loader.load('images/right.png'), side: THREE.DoubleSide, transparent: true }),
-  new THREE.MeshBasicMaterial({ map: loader.load('images/left.png'), side: THREE.DoubleSide, transparent: true }),
-  new THREE.MeshBasicMaterial({ map: loader.load('images/back.png'), side: THREE.DoubleSide, transparent: true }),
-  new THREE.MeshBasicMaterial({ map: loader.load('images/front.png'), side: THREE.DoubleSide, transparent: true }),
-  new THREE.MeshBasicMaterial({ map: loader.load('images/top.png'), side: THREE.DoubleSide, transparent: true }),
-  new THREE.MeshBasicMaterial({ map: loader.load('images/bottom.png'), side: THREE.DoubleSide, transparent: true }),
+  new THREE.MeshBasicMaterial({ map: loader.load('images/right.png'), side: THREE.DoubleSide, transparent: false }),
+  new THREE.MeshBasicMaterial({ map: loader.load('images/left.png'), side: THREE.DoubleSide, transparent: false }),
+  new THREE.MeshBasicMaterial({ map: loader.load('images/back.png'), side: THREE.DoubleSide, transparent: false }),
+  new THREE.MeshBasicMaterial({ map: loader.load('images/front.png'), side: THREE.DoubleSide, transparent: false }),
+  new THREE.MeshBasicMaterial({ map: loader.load('images/top.png'), side: THREE.DoubleSide, transparent: false }),
+  new THREE.MeshBasicMaterial({ map: loader.load('images/bottom.png'), side: THREE.DoubleSide, transparent: false }),
   circleMaterial,
   circleMaterial,
   circleMaterial,
@@ -213,7 +214,7 @@ loadManager.onLoad = () => {
   // const cube = new THREE.Mesh(axesGeometry, materials);
   // scene.add(cube);
   // cubes.push(cube);  // add to our list of cubes to rotate
-  for (var i = 0; i < materials.length; i++) {
+  for (let i = 0; i < materials.length; i++) {
     viewMesh[i] = new THREE.Mesh(viewPlanes[i], materials[i]);
     viewMesh[i].position.x = viewPositions[i][0];
     viewMesh[i].position.y = viewPositions[i][1];
@@ -234,31 +235,31 @@ loadManager.onLoad = () => {
 
 // Axis labels:
 const axisOffset = axisLength + 0.1;
-var text_opts_red = {
+let text_opts_red = {
   'font_size': 20,
   'background_color': { 'r': 0, 'g': 0, 'b': 0, 'a': 1 },
   'text_color': { 'r': 255, 'g': 0, 'b': 0, 'a': 1 }
 };
-var labels_data_x = ['X'];
-var labels_x = axisLabels(labels_data_x, { 'x': 1 }, [axisOffset, 0, 0],
+let labels_data_x = ['X'];
+let labels_x = axisLabels(labels_data_x, { 'x': 1 }, [axisOffset, 0, 0],
   text_opts_red);
 hud.add(labels_x);
-var text_opts_green = {
+let text_opts_green = {
   'font_size': 20,
   'background_color': { 'r': 0, 'g': 0, 'b': 0, 'a': 1 },
   'text_color': { 'r': 0, 'g': 255, 'b': 0, 'a': 1 }
 };
-var labels_data_y = ['Y'];
-var labels_y = axisLabels(labels_data_y, { 'y': 1 }, [0, axisOffset, 0],
+let labels_data_y = ['Y'];
+let labels_y = axisLabels(labels_data_y, { 'y': 1 }, [0, axisOffset, 0],
   text_opts_green);
 hud.add(labels_y);
-var text_opts_blue = {
+let text_opts_blue = {
   'font_size': 20,
   'background_color': { 'r': 0, 'g': 0, 'b': 0, 'a': 1 },
   'text_color': { 'r': 0, 'g': 0, 'b': 255, 'a': 1 }
 };
-var labels_data_z = ['Z'];
-var labels_z = axisLabels(labels_data_z, { 'z': 1 }, [0, 0, axisOffset],
+let labels_data_z = ['Z'];
+let labels_z = axisLabels(labels_data_z, { 'z': 1 }, [0, 0, axisOffset],
   text_opts_blue);
 hud.add(labels_z);
 
@@ -285,7 +286,7 @@ cameraOrthographic.up.y = 0;
 cameraOrthographic.up.z = 1;
 cameraOrthographic.lookAt([0, 0, 0]);
 
-var controls = new THREE.TrackballControls(activeCamera, canvas);
+let controls = new THREE.TrackballControls(activeCamera, canvas);
 
 controls.rotateSpeed = 2.0;
 controls.zoomSpeed = 1.2;
@@ -315,26 +316,26 @@ function toPersp() {
   // activeCamera.update();
 }
 
-var raycaster = new THREE.Raycaster();
-var mouse = new THREE.Vector2();
-var onClickPosition = new THREE.Vector2();
-var getMousePosition = function (dom, x, y) {
-  var rect = dom.getBoundingClientRect();
+let raycaster = new THREE.Raycaster();
+let mouse = new THREE.Vector2();
+let onClickPosition = new THREE.Vector2();
+let getMousePosition = function (dom, x, y) {
+  let rect = dom.getBoundingClientRect();
   return [(x - rect.left) / rect.width, (y - rect.top) / rect.height];
 };
-var getIntersects = function (point, objects) {
+let getIntersects = function (point, objects) {
   mouse.set((point.x * 2) - 1, - (point.y * 2) + 1);
   raycaster.setFromCamera(mouse, activeCamera);
   return raycaster.intersectObjects(objects);
 };
 function onCanvasClick(evt) {
   evt.preventDefault();
-  var array = getMousePosition(canvas, evt.clientX, evt.clientY);
+  let array = getMousePosition(canvas, evt.clientX, evt.clientY);
   onClickPosition.fromArray(array);
-  var intersects = getIntersects(onClickPosition, hud.children);
+  let intersects = getIntersects(onClickPosition, hud.children);
   if (intersects.length > 0 && intersects[0].uv) {
-    var intersect = intersects[0];
-    var clickCallback = clickCallbacksByUUID[intersect.object.uuid];
+    let intersect = intersects[0];
+    let clickCallback = clickCallbacksByUUID[intersect.object.uuid];
     if (clickCallback) {
       clickCallback();
       return false;
@@ -355,5 +356,13 @@ function animate() {
   controls.update();
 }
 function render() {
+  let activeCameraWorldDirection = new THREE.Vector3();
+  activeCamera.getWorldDirection(activeCameraWorldDirection);
+  console.log(activeCameraWorldDirection);
+  activeCameraWorldDirection.multiplyScalar(10);
+  let newPosition = new THREE.Vector3().addVectors(activeCamera.position, activeCameraWorldDirection);
+  console.log(newPosition);
+  hud.position.copy(newPosition);
+  // hud.quaternion.copy(activeCamera.quaternion);
   renderer.render(scene, activeCamera);
 }
