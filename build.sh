@@ -1,6 +1,4 @@
 #!/bin/bash -ex
-git checkout gh-pages
-git merge master
+# tinygo crashes on building this app. Use Go compiler instead.
 # tinygo build -o main.wasm -target wasm ./main.go
 GOARCH=wasm GOOS=js go build -o main.wasm
-git commit -am 'Update wasm'
