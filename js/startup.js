@@ -328,11 +328,10 @@ var getIntersects = function (point, objects) {
   return raycaster.intersectObjects(objects);
 };
 function onCanvasClick(evt) {
-  const uvMargin = 0.1;
   evt.preventDefault();
   var array = getMousePosition(canvas, evt.clientX, evt.clientY);
   onClickPosition.fromArray(array);
-  var intersects = getIntersects(onClickPosition, scene.children);
+  var intersects = getIntersects(onClickPosition, hud.children);
   if (intersects.length > 0 && intersects[0].uv) {
     var intersect = intersects[0];
     var clickCallback = clickCallbacksByUUID[intersect.object.uuid];
