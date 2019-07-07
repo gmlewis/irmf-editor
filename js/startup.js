@@ -122,9 +122,11 @@ scene.add(light);
 // var cube = new THREE.Mesh(geometry, material);
 // scene.add(cube);
 
-const axisLength = 1.5;
+const hud = new THREE.Object3D();
+
+const axisLength = 1.0;
 var axesHelper = new THREE.AxesHelper(axisLength);
-scene.add(axesHelper);
+hud.add(axesHelper);
 
 // var gimbleMaterial = new THREE.SpriteMaterial({ useScreenCoordinates: true, alignment: THREE.SpriteAlignment.topRight });
 // var sprite = new THREE.Sprite(gimbleMaterial);
@@ -178,22 +180,23 @@ const viewCallbacks = [
 const viewMesh = [];
 const loadManager = new THREE.LoadingManager();
 const loader = new THREE.TextureLoader(loadManager);
+const circleMaterial = new THREE.MeshBasicMaterial({ color: 0xffff00, side: THREE.DoubleSide, transparent: true });
 
 const materials = [
-  new THREE.MeshBasicMaterial({ map: loader.load('images/right.png') }),
-  new THREE.MeshBasicMaterial({ map: loader.load('images/left.png') }),
-  new THREE.MeshBasicMaterial({ map: loader.load('images/back.png') }),
-  new THREE.MeshBasicMaterial({ map: loader.load('images/front.png') }),
-  new THREE.MeshBasicMaterial({ map: loader.load('images/top.png') }),
-  new THREE.MeshBasicMaterial({ map: loader.load('images/bottom.png') }),
-  new THREE.MeshBasicMaterial({ color: 0xffff00 }),
-  new THREE.MeshBasicMaterial({ color: 0xffff00 }),
-  new THREE.MeshBasicMaterial({ color: 0xffff00 }),
-  new THREE.MeshBasicMaterial({ color: 0xffff00 }),
-  new THREE.MeshBasicMaterial({ color: 0xffff00 }),
-  new THREE.MeshBasicMaterial({ color: 0xffff00 }),
-  new THREE.MeshBasicMaterial({ color: 0xffff00 }),
-  new THREE.MeshBasicMaterial({ color: 0xffff00 }),
+  new THREE.MeshBasicMaterial({ map: loader.load('images/right.png'), side: THREE.DoubleSide, transparent: true }),
+  new THREE.MeshBasicMaterial({ map: loader.load('images/left.png'), side: THREE.DoubleSide, transparent: true }),
+  new THREE.MeshBasicMaterial({ map: loader.load('images/back.png'), side: THREE.DoubleSide, transparent: true }),
+  new THREE.MeshBasicMaterial({ map: loader.load('images/front.png'), side: THREE.DoubleSide, transparent: true }),
+  new THREE.MeshBasicMaterial({ map: loader.load('images/top.png'), side: THREE.DoubleSide, transparent: true }),
+  new THREE.MeshBasicMaterial({ map: loader.load('images/bottom.png'), side: THREE.DoubleSide, transparent: true }),
+  circleMaterial,
+  circleMaterial,
+  circleMaterial,
+  circleMaterial,
+  circleMaterial,
+  circleMaterial,
+  circleMaterial,
+  circleMaterial,
 ];
 
 materials[0].map.center.set(.5, .5);
@@ -211,8 +214,6 @@ loadManager.onLoad = () => {
   // scene.add(cube);
   // cubes.push(cube);  // add to our list of cubes to rotate
   for (var i = 0; i < materials.length; i++) {
-    materials[i].side = THREE.DoubleSide;
-    materials[i].transparent = true;
     viewMesh[i] = new THREE.Mesh(viewPlanes[i], materials[i]);
     viewMesh[i].position.x = viewPositions[i][0];
     viewMesh[i].position.y = viewPositions[i][1];
@@ -227,7 +228,7 @@ loadManager.onLoad = () => {
       viewMesh[i].setRotationFromEuler(euler);
     }
     clickCallbacksByUUID[viewMesh[i].uuid] = viewCallbacks[i];
-    scene.add(viewMesh[i]);
+    hud.add(viewMesh[i]);
   }
 };
 
@@ -241,7 +242,7 @@ var text_opts_red = {
 var labels_data_x = ['X'];
 var labels_x = axisLabels(labels_data_x, { 'x': 1 }, [axisOffset, 0, 0],
   text_opts_red);
-scene.add(labels_x);
+hud.add(labels_x);
 var text_opts_green = {
   'font_size': 20,
   'background_color': { 'r': 0, 'g': 0, 'b': 0, 'a': 1 },
@@ -250,7 +251,7 @@ var text_opts_green = {
 var labels_data_y = ['Y'];
 var labels_y = axisLabels(labels_data_y, { 'y': 1 }, [0, axisOffset, 0],
   text_opts_green);
-scene.add(labels_y);
+hud.add(labels_y);
 var text_opts_blue = {
   'font_size': 20,
   'background_color': { 'r': 0, 'g': 0, 'b': 0, 'a': 1 },
@@ -259,7 +260,9 @@ var text_opts_blue = {
 var labels_data_z = ['Z'];
 var labels_z = axisLabels(labels_data_z, { 'z': 1 }, [0, 0, axisOffset],
   text_opts_blue);
-scene.add(labels_z);
+hud.add(labels_z);
+
+scene.add(hud);
 
 // Isometric view on startup:
 activeCamera.position.x = 3;
