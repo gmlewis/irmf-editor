@@ -419,10 +419,9 @@ function render() {
 
   activateHudViewport();
   renderer.clearDepth();
-  hudActiveCamera.position.copy(activeCamera.position);
-  hudActiveCamera.position.normalize();
-  hudActiveCamera.position.multiplyScalar(3.25);
   hudActiveCamera.quaternion.copy(activeCamera.quaternion);
+  hudActiveCamera.position.set(0, 0, 3.25);
+  hudActiveCamera.position.applyQuaternion(hudActiveCamera.quaternion);
   renderer.render(hudScene, hudActiveCamera);
   // console.log('restoring viewport to full canvas:', fullViewport);
   renderer.setViewport(fullViewport);
