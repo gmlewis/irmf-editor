@@ -314,7 +314,8 @@ controls.keys = [65, 83, 68];
 
 controls.addEventListener('change', render);
 canvas.addEventListener('resize', onCanvasResize, false);
-canvas.addEventListener('click', onCanvasClick, false);
+canvas.addEventListener('mousedown', onCanvasClick, false);
+canvas.addEventListener('touchstart', onCanvasClick, false);
 onCanvasResize();
 animate();
 
@@ -334,11 +335,12 @@ let mouse = new THREE.Vector2();
 let onClickPosition = new THREE.Vector2();
 let getMousePosition = function (dom, x, y) {
   let rect = dom.getBoundingClientRect();
-  return [(x - rect.left) / rect.width, (y - rect.top) / rect.height];
+  return [(x + hudViewport.width - rect.right) / hudViewport.width,
+  (y - rect.top) / hudViewport.height];
 };
 let getIntersects = function (point, objects) {
   mouse.set((point.x * 2) - 1, - (point.y * 2) + 1);
-  raycaster.setFromCamera(mouse, activeCamera);
+  raycaster.setFromCamera(mouse, hudActiveCamera);
   return raycaster.intersectObjects(objects);
 };
 function activateHudViewport() {
@@ -353,19 +355,20 @@ function activateHudViewport() {
   }
   hudViewport.set(fullViewport.width - width, fullViewport.height - height,
     width, height);
-  // console.log('setting viewport to HUD:', hudViewport);
   renderer.setViewport(hudViewport);
 }
 function onCanvasClick(evt) {
+  const x = evt.clientX;
+  const y = evt.clientY;
+  let array = getMousePosition(canvas, x, y);
+  if (array[0] < 0. || array[1] > 1.) { return; }
+
   evt.preventDefault();
-  // TODO: account for HUD dimensions.
-  console.log('click at (' + evt.clientX.toString() + ',' + evt.clientY.toString() + ')');
-  let array = getMousePosition(canvas, evt.clientX, evt.clientY);
-  console.log(array);
   onClickPosition.fromArray(array);
   let intersects = getIntersects(onClickPosition, hud.children);
-  if (intersects.length > 0 && intersects[0].uv) {
-    let intersect = intersects[0];
+  for (let i = 0; i < intersects.length; i++) {
+    const intersect = intersects[i];
+    if (!intersect.uv || intersect.object.type !== 'Mesh') { continue; }
     let clickCallback = clickCallbacksByUUID[intersect.object.uuid];
     if (clickCallback) {
       clickCallback();
