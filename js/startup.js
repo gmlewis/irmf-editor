@@ -90,19 +90,29 @@ require(["vs/editor/editor.main"], function () {
 // Rendering...
 
 let vs = `#version 300 es
+// A matrix to transform the positions.
+uniform mat4 u_matrix;
 void main() {
+  // gl_Position = u_matrix * vec4( position, 1.0 );
   gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );
-}`;
+}
+`;
 let fs = `#version 300 es
 precision highp float;
 precision highp int;
+uniform vec3 u_ll;
+uniform vec3 u_ur;
+uniform vec2 u_resolution;
 out vec4 out_FragColor;
 void main() {
-  out_FragColor = vec4( 1.0 );
-}`;
+  vec2 st = gl_FragCoord.xy/u_resolution.xy;
+  out_FragColor=vec4(st.x,st.y,0.0,1.0);
+}
+`;
 
 const scene = new THREE.Scene();
 const hudScene = new THREE.Scene();
+const modelScene = new THREE.Scene();
 let fullViewport = new THREE.Vector4();
 let hudViewport = new THREE.Vector4();
 const hudSize = 256;
@@ -129,10 +139,19 @@ const light = new THREE.DirectionalLight(0xFFFFFF, 1);
 light.position.set(-1, 2, 4);
 scene.add(light);
 
-let geometry = new THREE.BoxGeometry(1, 1, 1);
-let material = new THREE.ShaderMaterial({ vertexShader: vs, fragmentShader: fs });
-let cube = new THREE.Mesh(geometry, material);
-scene.add(cube);
+const uniforms = {
+  u_ll: { type: 'v3', value: new THREE.Vector3() }, // MBB min
+  u_ur: { type: 'v3', value: new THREE.Vector3() },  // MBB max
+  u_matrix: { type: 'm4', value: new THREE.Matrix4() },
+  u_resolution: { type: 'v2', value: new THREE.Vector2() }
+};
+// const modelGeometry = new THREE.BoxGeometry(1, 1, 1);
+const modelGeometry = new THREE.PlaneBufferGeometry();
+const material = new THREE.ShaderMaterial({ uniforms, vertexShader: vs, fragmentShader: fs, side: THREE.DoubleSide });
+const modelMesh = new THREE.Mesh(modelGeometry, material);
+scene.add(modelMesh);
+uniforms.u_resolution.value.x = 1024;
+uniforms.u_resolution.value.y = 1024;
 
 const hud = new THREE.Object3D();
 
@@ -140,25 +159,6 @@ const axisLength = 1.0;
 let axesHelper = new THREE.AxesHelper(axisLength);
 hud.add(axesHelper);
 
-// let gimbleMaterial = new THREE.SpriteMaterial({ useScreenCoordinates: true, alignment: THREE.SpriteAlignment.topRight });
-// let sprite = new THREE.Sprite(gimbleMaterial);
-// sprite.position.set(50, 50, 0);
-// sprite.scale.set(64, 64, 1.0); // imageWidth, imageHeight
-// scene.add(sprite);
-
-// const boxWidth = 1;
-// const boxHeight = 1;
-// const boxDepth = 1;
-// const axesGeometry = new THREE.BoxBufferGeometry(boxWidth, boxHeight, boxDepth);
-// const filletBox = function (size, fillet) {
-//   let verts = [new THREE.Vector2(-0.5 * size, -0.5 * size)];
-//   for (let ang = 0; ang < 2 * Math.PI; ang += 0.1) {
-//     verts.push(new THREE.Vector2(size * 0.5 * Math.cos(ang), size * 0.5 * Math.sin(ang)));
-//   }
-//   return new THREE.Shape(verts);
-// }
-
-// const viewPlane = new THREE.ShapeGeometry(filletBox(0.8, 0.25));
 const viewPlane = new THREE.CircleBufferGeometry(0.4, 32);
 const viewCircle = new THREE.CircleBufferGeometry(0.1, 32);
 const viewPlanes = [viewPlane, viewPlane, viewPlane, viewPlane, viewPlane, viewPlane,
@@ -222,9 +222,6 @@ materials[5].map.rotation = THREE.Math.degToRad(180);
 
 const clickCallbacksByUUID = {};
 loadManager.onLoad = () => {
-  // const cube = new THREE.Mesh(axesGeometry, materials);
-  // scene.add(cube);
-  // cubes.push(cube);  // add to our list of cubes to rotate
   for (let i = 0; i < materials.length; i++) {
     viewMesh[i] = new THREE.Mesh(viewPlanes[i], materials[i]);
     viewMesh[i].position.x = viewPositions[i][0];
