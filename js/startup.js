@@ -102,25 +102,35 @@ void main() {
 }`;
 
 const scene = new THREE.Scene();
+const hudScene = new THREE.Scene();
+let fullViewport = new THREE.Vector4();
+let hudViewport = new THREE.Vector4();
+const hudSize = 256;
+
 let aspectRatio = canvas.width / canvas.height;
 console.log('canvas: (' + canvas.width.toString() + ',' + canvas.height.toString() + '), aspectRatio=' + aspectRatio.toString());
 let activeCamera = null;
-let cameraPerspective = new THREE.PerspectiveCamera(45, aspectRatio, 0.1, 1000);
-let frustumSize = 2.;
-let cameraOrthographic = new THREE.OrthographicCamera(
-  -aspectRatio * frustumSize, aspectRatio * frustumSize, frustumSize, -frustumSize, 1, 10);
+let hudActiveCamera = null;
+const cameraPerspective = new THREE.PerspectiveCamera(45, aspectRatio, 0.1, 1000);
+const frustumSize = 1.25;
+const cameraOrthographic = new THREE.OrthographicCamera(
+  -aspectRatio * frustumSize, aspectRatio * frustumSize, frustumSize, -frustumSize, 0.1, 1000);
+const hudCameraPerspective = new THREE.PerspectiveCamera(45, aspectRatio, 0.1, 1000);
+const hudCameraOrthographic = new THREE.OrthographicCamera(
+  -aspectRatio * frustumSize, aspectRatio * frustumSize, frustumSize, -frustumSize, 0.1, 1000);
 
 let renderer = new THREE.WebGLRenderer({ canvas: canvas, context: gl });
 renderer.setSize(canvas.width, canvas.height);
+renderer.autoClear = false;
 
 const light = new THREE.DirectionalLight(0xFFFFFF, 1);
 light.position.set(-1, 2, 4);
 scene.add(light);
 
-// let geometry = new THREE.BoxGeometry(1, 1, 1);
-// let material = new THREE.ShaderMaterial({ vertexShader: vs, fragmentShader: fs });
-// let cube = new THREE.Mesh(geometry, material);
-// scene.add(cube);
+let geometry = new THREE.BoxGeometry(1, 1, 1);
+let material = new THREE.ShaderMaterial({ vertexShader: vs, fragmentShader: fs });
+let cube = new THREE.Mesh(geometry, material);
+scene.add(cube);
 
 const hud = new THREE.Object3D();
 
@@ -262,7 +272,7 @@ let labels_z = axisLabels(labels_data_z, { 'z': 1 }, [0, 0, axisOffset],
   text_opts_blue);
 hud.add(labels_z);
 
-scene.add(hud);
+hudScene.add(hud);
 
 // Initialize cameras on startup:
 cameraPerspective.position.x = 3;
@@ -278,6 +288,15 @@ cameraOrthographic.position.z = 0;
 cameraOrthographic.up.y = 0;
 cameraOrthographic.up.z = 1;
 cameraOrthographic.lookAt([0, 0, 0]);
+hudCameraPerspective.position.copy(cameraPerspective.position);
+hudCameraPerspective.up.y = 0;
+hudCameraPerspective.up.z = 1;
+hudCameraPerspective.lookAt([0, 0, 0]);
+hudActiveCamera = hudCameraPerspective;
+hudCameraOrthographic.position.copy(cameraOrthographic.position);
+hudCameraOrthographic.up.y = 0;
+hudCameraOrthographic.up.z = 1;
+hudCameraOrthographic.lookAt([0, 0, 0]);
 
 let controls = new THREE.TrackballControls(activeCamera, canvas);
 
@@ -302,10 +321,12 @@ animate();
 function toOrtho() {
   activeCamera = cameraOrthographic;
   controls.object = activeCamera;
+  hudActiveCamera = hudCameraOrthographic;
 }
 function toPersp() {
   activeCamera = cameraPerspective;
   controls.object = activeCamera;
+  hudActiveCamera = hudCameraPerspective;
 }
 
 let raycaster = new THREE.Raycaster();
@@ -320,9 +341,27 @@ let getIntersects = function (point, objects) {
   raycaster.setFromCamera(mouse, activeCamera);
   return raycaster.intersectObjects(objects);
 };
+function activateHudViewport() {
+  renderer.getViewport(fullViewport);
+  let width = hudSize;
+  if (fullViewport.width < hudSize) {
+    width = fullViewport.width;
+  }
+  let height = hudSize;
+  if (fullViewport.height < hudSize) {
+    height = fullViewport.height;
+  }
+  hudViewport.set(fullViewport.width - width, fullViewport.height - height,
+    width, height);
+  // console.log('setting viewport to HUD:', hudViewport);
+  renderer.setViewport(hudViewport);
+}
 function onCanvasClick(evt) {
   evt.preventDefault();
+  // TODO: account for HUD dimensions.
+  console.log('click at (' + evt.clientX.toString() + ',' + evt.clientY.toString() + ')');
   let array = getMousePosition(canvas, evt.clientX, evt.clientY);
+  console.log(array);
   onClickPosition.fromArray(array);
   let intersects = getIntersects(onClickPosition, hud.children);
   if (intersects.length > 0 && intersects[0].uv) {
@@ -344,22 +383,44 @@ function onCanvasResize() {
   cameraOrthographic.updateProjectionMatrix();
   cameraPerspective.aspect = aspectRatio;
   cameraPerspective.updateProjectionMatrix();
+
+  let width = canvas.width - hudSize;
+  let height = canvas.height - hudSize;
+  if (canvas.width < hudSize) {
+    width = canvas.width;
+  }
+  if (canvas.height < hudSize) {
+    height = canvas.height;
+  }
+  const hudAspectRatio = width / height;
+  hudCameraOrthographic.left = -hudAspectRatio * frustumSize;
+  hudCameraOrthographic.right = hudAspectRatio * frustumSize;
+  hudCameraOrthographic.top = frustumSize;
+  hudCameraOrthographic.bottom = -frustumSize;
+  hudCameraOrthographic.updateProjectionMatrix();
+  hudCameraPerspective.aspect = hudAspectRatio;
+  hudCameraPerspective.updateProjectionMatrix();
+
   renderer.setSize(canvas.width, canvas.height);
+  renderer.getViewport(fullViewport);
   controls.handleResize();
   render();
 }
 function animate() {
-  requestAnimationFrame(animate);
   controls.update();
+  requestAnimationFrame(animate);
 }
 function render() {
-  // let activeCameraWorldDirection = new THREE.Vector3();
-  // activeCamera.getWorldDirection(activeCameraWorldDirection);
-  // console.log(activeCameraWorldDirection);
-  // activeCameraWorldDirection.multiplyScalar(10);
-  // let newPosition = new THREE.Vector3().addVectors(activeCamera.position, activeCameraWorldDirection);
-  // console.log(newPosition);
-  // hud.position.copy(newPosition);
-  // hud.quaternion.copy(activeCamera.quaternion);
+  renderer.clear();
   renderer.render(scene, activeCamera);
+
+  activateHudViewport();
+  renderer.clearDepth();
+  hudActiveCamera.position.copy(activeCamera.position);
+  hudActiveCamera.position.normalize();
+  hudActiveCamera.position.multiplyScalar(3.25);
+  hudActiveCamera.quaternion.copy(activeCamera.quaternion);
+  renderer.render(hudScene, hudActiveCamera);
+  // console.log('restoring viewport to full canvas:', fullViewport);
+  renderer.setViewport(fullViewport);
 }
