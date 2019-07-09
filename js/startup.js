@@ -94,16 +94,16 @@ const vs = `#version 300 es
 uniform vec3 u_ll;
 uniform vec3 u_ur;
 uniform mat4 u_matrix;
+uniform float u_z;
 out vec4 v_xyz;
 void main() {
-  // gl_Position = u_matrix * vec4( position, 1.0 );
   gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );
   // Convert from clipspace to model space.
-  // Clipspace goes from -1.0 to +1.0.
+  // Clipspace goes from -1.0 to +1.0 in x and y.
   // norm goes from 0.0 to 1.0.
-  vec4 norm = gl_Position * 0.5 + 0.5;
+  vec2 norm = position.xy*0.5+0.5;
   // Model space (v_xyz) goes from u_ll to u_ur.
-  v_xyz = (norm * vec4(u_ur,1.0)) + vec4(u_ll, 1.0);
+  v_xyz = vec4((norm * (u_ur.xy-u_ll.xy)) + u_ll.xy, u_z, 1.0);
 }
 `;
 const fsHeader = `#version 300 es
@@ -111,7 +111,24 @@ precision highp float;
 precision highp int;
 uniform vec3 u_ll;
 uniform vec3 u_ur;
-uniform vec2 u_resolution;
+uniform vec3 u_resolution;
+uniform int u_numMaterials;
+uniform vec4 u_color1;
+uniform vec4 u_color2;
+uniform vec4 u_color3;
+uniform vec4 u_color4;
+uniform vec4 u_color5;
+uniform vec4 u_color6;
+uniform vec4 u_color7;
+uniform vec4 u_color8;
+uniform vec4 u_color9;
+uniform vec4 u_color10;
+uniform vec4 u_color11;
+uniform vec4 u_color12;
+uniform vec4 u_color13;
+uniform vec4 u_color14;
+uniform vec4 u_color15;
+uniform vec4 u_color16;
 in vec4 v_xyz;
 out vec4 out_FragColor;
 `;
@@ -130,12 +147,16 @@ void mainModel4( out vec4 materials, in vec3 xyz ) {
 `;
 const fsFooter = `
 void main() {
-  vec4 materials;
-  mainModel4(materials, v_xyz.xyz);
-  out_FragColor = vec4(0.75*materials.x+0.25*materials.w,
-    0.75*materials.y+0.25*materials.w,
-    0.75*materials.z+0.25*materials.w,
-    1.0);
+  if (u_numMaterials <= 4) {
+    vec4 materials;
+    mainModel4(materials, v_xyz.xyz);
+    out_FragColor = u_color1*materials.x + u_color2*materials.y+u_color3*materials.z + u_color4*materials.w;
+    out_FragColor = v_xyz;  // DEBUG
+  // } else if (u_numMaterials <= 9) {
+
+  // } else if (u_numMaterials <= 16) {
+
+  }
 }
 `;
 
@@ -146,11 +167,12 @@ let fullViewport = new THREE.Vector4();
 let hudViewport = new THREE.Vector4();
 const hudSize = 256;
 
+const fov = 75.0;
 let aspectRatio = canvas.width / canvas.height;
 console.log('canvas: (' + canvas.width.toString() + ',' + canvas.height.toString() + '), aspectRatio=' + aspectRatio.toString());
 let activeCamera = null;
 let hudActiveCamera = null;
-const cameraPerspective = new THREE.PerspectiveCamera(45, aspectRatio, 0.1, 1000);
+const cameraPerspective = new THREE.PerspectiveCamera(fov, aspectRatio, 0.1, 1000);
 const resetCameraD = 1.5;
 const frustumSize = 1.0;
 const hudFrustumSize = 1.25;
@@ -172,7 +194,25 @@ const uniforms = {
   u_ll: { type: 'v3', value: new THREE.Vector3() }, // MBB min
   u_ur: { type: 'v3', value: new THREE.Vector3() },  // MBB max
   u_matrix: { type: 'm4', value: new THREE.Matrix4() },
-  u_resolution: { type: 'v2', value: new THREE.Vector2() }
+  u_resolution: { type: 'v3', value: new THREE.Vector3() },
+  u_numMaterials: { type: 'int', value: 1 },
+  u_z: { type: 'float', value: 0 },
+  u_color1: { type: 'v4', value: new THREE.Vector4(1, 0, 0, 1) },
+  u_color2: { type: 'v4', value: new THREE.Vector4(0, 1, 0, 1) },
+  u_color3: { type: 'v4', value: new THREE.Vector4(0, 0, 1, 1) },
+  u_color4: { type: 'v4', value: new THREE.Vector4(1, 1, 0, 1) },
+  u_color5: { type: 'v4', value: new THREE.Vector4(0, 1, 1, 1) },
+  u_color6: { type: 'v4', value: new THREE.Vector4(1, 0, 1, 1) },
+  u_color7: { type: 'v4', value: new THREE.Vector4(1) },
+  u_color8: { type: 'v4', value: new THREE.Vector4(1) },
+  u_color9: { type: 'v4', value: new THREE.Vector4(1) },
+  u_color10: { type: 'v4', value: new THREE.Vector4(1) },
+  u_color11: { type: 'v4', value: new THREE.Vector4(1) },
+  u_color12: { type: 'v4', value: new THREE.Vector4(1) },
+  u_color13: { type: 'v4', value: new THREE.Vector4(1) },
+  u_color14: { type: 'v4', value: new THREE.Vector4(1) },
+  u_color15: { type: 'v4', value: new THREE.Vector4(1) },
+  u_color16: { type: 'v4', value: new THREE.Vector4(1) },
 };
 // const modelGeometry = new THREE.BoxGeometry(1, 1, 1);
 const modelGeometry = new THREE.PlaneBufferGeometry();
@@ -180,8 +220,9 @@ const material = new THREE.ShaderMaterial({ uniforms, vertexShader: vs, fragment
 const modelMesh = new THREE.Mesh(modelGeometry, material);
 scene.add(modelMesh);
 // TODO: Make this a slider in the display.
-uniforms.u_resolution.value.x = 1024;
-uniforms.u_resolution.value.y = 1024;
+uniforms.u_resolution.value.x = 128;
+uniforms.u_resolution.value.y = 128;
+uniforms.u_resolution.value.z = 128;
 // TODO: Take these from the editor.
 uniforms.u_ll.value.x = -5;
 uniforms.u_ll.value.y = -5;
@@ -189,6 +230,11 @@ uniforms.u_ll.value.z = -5;
 uniforms.u_ur.value.x = 5;
 uniforms.u_ur.value.y = 5;
 uniforms.u_ur.value.z = 5;
+// TODO: Make this configurable from the editor.
+modelMesh.position.addVectors(uniforms.u_ll.value, uniforms.u_ur.value);
+modelMesh.position.multiplyScalar(0.5);
+modelMesh.scale.subVectors(uniforms.u_ur.value, uniforms.u_ll.value);
+modelMesh.scale.multiplyScalar(2.0);
 
 const hud = new THREE.Object3D();
 
@@ -455,9 +501,10 @@ function render() {
   // cameraHelper.update();
   renderer.clear();
 
-  // TODO: Make this configurable.
-  for (let z = -1.0; z <= 1.0; z += 0.005) {
+  const zstep = (uniforms.u_ur.value.z - uniforms.u_ll.value.z) / uniforms.u_resolution.value.z;
+  for (let z = uniforms.u_ll.value.z; z <= uniforms.u_ur.value.z; z += zstep) {
     modelMesh.position.z = z;
+    uniforms.u_z.value = z;
     renderer.render(scene, activeCamera);
   }
 
