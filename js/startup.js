@@ -94,16 +94,11 @@ const vs = `#version 300 es
 uniform vec3 u_ll;
 uniform vec3 u_ur;
 uniform mat4 u_matrix;
-uniform float u_z;
 out vec4 v_xyz;
 void main() {
   gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );
-  // Convert from clipspace to model space.
-  // Clipspace goes from -1.0 to +1.0 in x and y.
-  // norm goes from 0.0 to 1.0.
-  vec2 norm = position.xy*0.5+0.5;
-  // Model space (v_xyz) goes from u_ll to u_ur.
-  v_xyz = vec4((norm * (u_ur.xy-u_ll.xy)) + u_ll.xy, u_z, 1.0);
+  // u_matrix maps the position to 3D model world space for the plane mesh.
+  v_xyz = u_matrix * vec4( position, 1.0 );
 }
 `;
 const fsHeader = `#version 300 es
@@ -196,7 +191,7 @@ const uniforms = {
   u_matrix: { type: 'm4', value: new THREE.Matrix4() },
   u_resolution: { type: 'v3', value: new THREE.Vector3() },
   u_numMaterials: { type: 'int', value: 1 },
-  u_z: { type: 'float', value: 0 },
+  // TODO: Make all the colors configurable through the GUI.
   u_color1: { type: 'v4', value: new THREE.Vector4(1, 0, 0, 1) },
   u_color2: { type: 'v4', value: new THREE.Vector4(0, 1, 0, 1) },
   u_color3: { type: 'v4', value: new THREE.Vector4(0, 0, 1, 1) },
@@ -234,7 +229,7 @@ uniforms.u_ur.value.z = 5;
 modelMesh.position.addVectors(uniforms.u_ll.value, uniforms.u_ur.value);
 modelMesh.position.multiplyScalar(0.5);
 modelMesh.scale.subVectors(uniforms.u_ur.value, uniforms.u_ll.value);
-modelMesh.scale.multiplyScalar(2.0);
+modelMesh.scale.multiplyScalar(0.5);
 
 const hud = new THREE.Object3D();
 
@@ -504,7 +499,13 @@ function render() {
   const zstep = (uniforms.u_ur.value.z - uniforms.u_ll.value.z) / uniforms.u_resolution.value.z;
   for (let z = uniforms.u_ll.value.z; z <= uniforms.u_ur.value.z; z += zstep) {
     modelMesh.position.z = z;
-    uniforms.u_z.value = z;
+    uniforms.u_matrix.value.set(
+      modelMesh.scale.x, 0, 0, 0,
+      0, modelMesh.scale.y, 0, 0,
+      0, 0, 0, z,
+      0, 0, 0, 1,
+    );
+
     renderer.render(scene, activeCamera);
   }
 
