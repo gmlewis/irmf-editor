@@ -168,7 +168,7 @@ console.log('canvas: (' + canvas.width.toString() + ',' + canvas.height.toString
 let activeCamera = null;
 let hudActiveCamera = null;
 const cameraPerspective = new THREE.PerspectiveCamera(fov, aspectRatio, 0.1, 1000);
-const resetCameraD = 1.5;
+const resetCameraD = 5.0;
 const frustumSize = 1.0;
 const hudFrustumSize = 1.25;
 const cameraOrthographic = new THREE.OrthographicCamera(
@@ -181,9 +181,15 @@ let renderer = new THREE.WebGLRenderer({ canvas: canvas, context: gl });
 renderer.setSize(canvas.width, canvas.height);
 renderer.autoClear = false;
 
+// Probably not needed at all:
 const light = new THREE.DirectionalLight(0xFFFFFF, 1);
 light.position.set(-1, 2, 4);
 scene.add(light);
+// Just to help with debugging...
+// const debugGeometry = new THREE.PlaneBufferGeometry();
+// const debugMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide, transparent: false });
+// const debugMesh = new THREE.Mesh(debugGeometry, debugMaterial);
+// scene.add(debugMesh);
 
 const uniforms = {
   u_ll: { type: 'v3', value: new THREE.Vector3() }, // MBB min
@@ -210,7 +216,7 @@ const uniforms = {
   u_color16: { type: 'v4', value: new THREE.Vector4(1) },
 };
 // const modelGeometry = new THREE.BoxGeometry(1, 1, 1);
-const modelGeometry = new THREE.PlaneBufferGeometry();
+const modelGeometry = new THREE.PlaneBufferGeometry(2, 2);
 const material = new THREE.ShaderMaterial({ uniforms, vertexShader: vs, fragmentShader: fsHeader + fsModel + fsFooter, side: THREE.DoubleSide, transparent: true });
 const modelMesh = new THREE.Mesh(modelGeometry, material);
 scene.add(modelMesh);
