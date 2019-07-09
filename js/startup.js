@@ -112,12 +112,14 @@ console.log('canvas: (' + canvas.width.toString() + ',' + canvas.height.toString
 let activeCamera = null;
 let hudActiveCamera = null;
 const cameraPerspective = new THREE.PerspectiveCamera(45, aspectRatio, 0.1, 1000);
-const frustumSize = 1.25;
+const resetCameraD = 1.5;
+const frustumSize = 1.0;
+const hudFrustumSize = 1.25;
 const cameraOrthographic = new THREE.OrthographicCamera(
   -aspectRatio * frustumSize, aspectRatio * frustumSize, frustumSize, -frustumSize, 0.1, 1000);
 const hudCameraPerspective = new THREE.PerspectiveCamera(45, aspectRatio, 0.1, 1000);
 const hudCameraOrthographic = new THREE.OrthographicCamera(
-  -aspectRatio * frustumSize, aspectRatio * frustumSize, frustumSize, -frustumSize, 0.1, 1000);
+  -hudFrustumSize, hudFrustumSize, hudFrustumSize, -hudFrustumSize, 0.1, 1000);
 
 let renderer = new THREE.WebGLRenderer({ canvas: canvas, context: gl });
 renderer.setSize(canvas.width, canvas.height);
@@ -177,14 +179,14 @@ const viewCallbacks = [
   function () { toOrtho(); controls.position0.set(0, -5, 0); controls.up0.set(0, 0, 1); controls.reset(); },
   function () { toOrtho(); controls.position0.set(0, 0, 5); controls.up0.set(0, 1, 0); controls.reset(); },
   function () { toOrtho(); controls.position0.set(0, 0, -5); controls.up0.set(0, -1, 0); controls.reset(); },
-  function () { toPersp(); controls.position0.set(3, -3, 3); controls.up0.set(0, 0, 1); controls.reset(); },
-  function () { toPersp(); controls.position0.set(3, 3, 3); controls.up0.set(0, 0, 1); controls.reset(); },
-  function () { toPersp(); controls.position0.set(-3, 3, 3); controls.up0.set(0, 0, 1); controls.reset(); },
-  function () { toPersp(); controls.position0.set(-3, -3, 3); controls.up0.set(0, 0, 1); controls.reset(); },
-  function () { toPersp(); controls.position0.set(3, -3, -3); controls.up0.set(0, 0, 1); controls.reset(); },
-  function () { toPersp(); controls.position0.set(3, 3, -3); controls.up0.set(0, 0, 1); controls.reset(); },
-  function () { toPersp(); controls.position0.set(-3, 3, -3); controls.up0.set(0, 0, 1); controls.reset(); },
-  function () { toPersp(); controls.position0.set(-3, -3, -3); controls.up0.set(0, 0, 1); controls.reset(); }
+  function () { toPersp(); controls.position0.set(resetCameraD, -resetCameraD, resetCameraD); controls.up0.set(0, 0, 1); controls.reset(); },
+  function () { toPersp(); controls.position0.set(resetCameraD, resetCameraD, resetCameraD); controls.up0.set(0, 0, 1); controls.reset(); },
+  function () { toPersp(); controls.position0.set(-resetCameraD, resetCameraD, resetCameraD); controls.up0.set(0, 0, 1); controls.reset(); },
+  function () { toPersp(); controls.position0.set(-resetCameraD, -resetCameraD, resetCameraD); controls.up0.set(0, 0, 1); controls.reset(); },
+  function () { toPersp(); controls.position0.set(resetCameraD, -resetCameraD, -resetCameraD); controls.up0.set(0, 0, 1); controls.reset(); },
+  function () { toPersp(); controls.position0.set(resetCameraD, resetCameraD, -resetCameraD); controls.up0.set(0, 0, 1); controls.reset(); },
+  function () { toPersp(); controls.position0.set(-resetCameraD, resetCameraD, -resetCameraD); controls.up0.set(0, 0, 1); controls.reset(); },
+  function () { toPersp(); controls.position0.set(-resetCameraD, -resetCameraD, -resetCameraD); controls.up0.set(0, 0, 1); controls.reset(); }
 ];
 
 const viewMesh = [];
@@ -275,9 +277,9 @@ hud.add(labels_z);
 hudScene.add(hud);
 
 // Initialize cameras on startup:
-cameraPerspective.position.x = 3;
-cameraPerspective.position.y = -3;
-cameraPerspective.position.z = 3;
+cameraPerspective.position.x = resetCameraD;
+cameraPerspective.position.y = -resetCameraD;
+cameraPerspective.position.z = resetCameraD;
 cameraPerspective.up.y = 0;
 cameraPerspective.up.z = 1;
 cameraPerspective.lookAt([0, 0, 0]);
@@ -396,10 +398,10 @@ function onCanvasResize() {
     height = canvas.height;
   }
   const hudAspectRatio = width / height;
-  hudCameraOrthographic.left = -hudAspectRatio * frustumSize;
-  hudCameraOrthographic.right = hudAspectRatio * frustumSize;
-  hudCameraOrthographic.top = frustumSize;
-  hudCameraOrthographic.bottom = -frustumSize;
+  hudCameraOrthographic.left = -hudAspectRatio * hudFrustumSize;
+  hudCameraOrthographic.right = hudAspectRatio * hudFrustumSize;
+  hudCameraOrthographic.top = hudFrustumSize;
+  hudCameraOrthographic.bottom = -hudFrustumSize;
   hudCameraOrthographic.updateProjectionMatrix();
   hudCameraPerspective.aspect = hudAspectRatio;
   hudCameraPerspective.updateProjectionMatrix();
