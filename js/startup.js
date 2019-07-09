@@ -145,8 +145,8 @@ void main() {
   if (u_numMaterials <= 4) {
     vec4 materials;
     mainModel4(materials, v_xyz.xyz);
-    out_FragColor = u_color1*materials.x + u_color2*materials.y+u_color3*materials.z + u_color4*materials.w;
-    out_FragColor = v_xyz/5.0 + 0.5;  // DEBUG
+    out_FragColor = u_color1*materials.x + u_color2*materials.y + u_color3*materials.z + u_color4*materials.w;
+    // out_FragColor = v_xyz/5.0 + 0.5;  // DEBUG
   // } else if (u_numMaterials <= 9) {
 
   // } else if (u_numMaterials <= 16) {
@@ -211,7 +211,7 @@ const uniforms = {
 };
 // const modelGeometry = new THREE.BoxGeometry(1, 1, 1);
 const modelGeometry = new THREE.PlaneBufferGeometry();
-const material = new THREE.ShaderMaterial({ uniforms, vertexShader: vs, fragmentShader: fsHeader + fsModel + fsFooter, side: THREE.DoubleSide });
+const material = new THREE.ShaderMaterial({ uniforms, vertexShader: vs, fragmentShader: fsHeader + fsModel + fsFooter, side: THREE.DoubleSide, transparent: true });
 const modelMesh = new THREE.Mesh(modelGeometry, material);
 scene.add(modelMesh);
 // TODO: Make this a slider in the display.
