@@ -151,7 +151,7 @@ void main() {
     vec4 materials;
     mainModel4(materials, v_xyz.xyz);
     out_FragColor = u_color1*materials.x + u_color2*materials.y+u_color3*materials.z + u_color4*materials.w;
-    out_FragColor = v_xyz;  // DEBUG
+    out_FragColor = v_xyz/5.0 + 0.5;  // DEBUG
   // } else if (u_numMaterials <= 9) {
 
   // } else if (u_numMaterials <= 16) {
