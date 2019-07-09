@@ -384,8 +384,8 @@ function onCanvasResize() {
   cameraPerspective.aspect = aspectRatio;
   cameraPerspective.updateProjectionMatrix();
 
-  let width = canvas.width - hudSize;
-  let height = canvas.height - hudSize;
+  let width = hudSize;
+  let height = hudSize;
   if (canvas.width < hudSize) {
     width = canvas.width;
   }
