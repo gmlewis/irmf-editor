@@ -89,24 +89,53 @@ require(["vs/editor/editor.main"], function () {
 
 // Rendering...
 
-let vs = `#version 300 es
+const vs = `#version 300 es
 // A matrix to transform the positions.
+uniform vec3 u_ll;
+uniform vec3 u_ur;
 uniform mat4 u_matrix;
+out vec4 v_xyz;
 void main() {
   // gl_Position = u_matrix * vec4( position, 1.0 );
   gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );
+  // Convert from clipspace to model space.
+  // Clipspace goes from -1.0 to +1.0.
+  // norm goes from 0.0 to 1.0.
+  vec4 norm = gl_Position * 0.5 + 0.5;
+  // Model space (v_xyz) goes from u_ll to u_ur.
+  v_xyz = (norm * vec4(u_ur,1.0)) + vec4(u_ll, 1.0);
 }
 `;
-let fs = `#version 300 es
+const fsHeader = `#version 300 es
 precision highp float;
 precision highp int;
 uniform vec3 u_ll;
 uniform vec3 u_ur;
 uniform vec2 u_resolution;
+in vec4 v_xyz;
 out vec4 out_FragColor;
+`;
+let fsModel = `
+// TODO: Take this model from the editor.
+float sphere(in vec3 pos, in float radius, in vec3 xyz) {
+  xyz -= pos;  // Move sphere into place.
+  float r = length(xyz);
+  return r <= radius ? 1.0 : 0.0;
+}
+
+void mainModel4( out vec4 materials, in vec3 xyz ) {
+  const float radius = 5.0;  // 10mm diameter sphere.
+  materials[0] = sphere(vec3(0), radius, xyz);
+}
+`;
+const fsFooter = `
 void main() {
-  vec2 st = gl_FragCoord.xy/u_resolution.xy;
-  out_FragColor=vec4(st.x,st.y,0.0,1.0);
+  vec4 materials;
+  mainModel4(materials, v_xyz.xyz);
+  out_FragColor = vec4(0.75*materials.x+0.25*materials.w,
+    0.75*materials.y+0.25*materials.w,
+    0.75*materials.z+0.25*materials.w,
+    1.0);
 }
 `;
 
@@ -147,11 +176,19 @@ const uniforms = {
 };
 // const modelGeometry = new THREE.BoxGeometry(1, 1, 1);
 const modelGeometry = new THREE.PlaneBufferGeometry();
-const material = new THREE.ShaderMaterial({ uniforms, vertexShader: vs, fragmentShader: fs, side: THREE.DoubleSide });
+const material = new THREE.ShaderMaterial({ uniforms, vertexShader: vs, fragmentShader: fsHeader + fsModel + fsFooter, side: THREE.DoubleSide });
 const modelMesh = new THREE.Mesh(modelGeometry, material);
 scene.add(modelMesh);
+// TODO: Make this a slider in the display.
 uniforms.u_resolution.value.x = 1024;
 uniforms.u_resolution.value.y = 1024;
+// TODO: Take these from the editor.
+uniforms.u_ll.value.x = -5;
+uniforms.u_ll.value.y = -5;
+uniforms.u_ll.value.z = -5;
+uniforms.u_ur.value.x = 5;
+uniforms.u_ur.value.y = 5;
+uniforms.u_ur.value.z = 5;
 
 const hud = new THREE.Object3D();
 
@@ -296,6 +333,8 @@ hudCameraOrthographic.position.copy(cameraOrthographic.position);
 hudCameraOrthographic.up.y = 0;
 hudCameraOrthographic.up.z = 1;
 hudCameraOrthographic.lookAt([0, 0, 0]);
+// const cameraHelper = new THREE.CameraHelper(activeCamera);
+// scene.add(cameraHelper);
 
 let controls = new THREE.TrackballControls(activeCamera, canvas);
 
@@ -413,6 +452,7 @@ function animate() {
   requestAnimationFrame(animate);
 }
 function render() {
+  // cameraHelper.update();
   renderer.clear();
   renderer.render(scene, activeCamera);
 
