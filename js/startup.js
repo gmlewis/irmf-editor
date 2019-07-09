@@ -454,7 +454,12 @@ function animate() {
 function render() {
   // cameraHelper.update();
   renderer.clear();
-  renderer.render(scene, activeCamera);
+
+  // TODO: Make this configurable.
+  for (let z = -1.0; z <= 1.0; z += 0.005) {
+    modelMesh.position.z = z;
+    renderer.render(scene, activeCamera);
+  }
 
   activateHudViewport();
   renderer.clearDepth();
