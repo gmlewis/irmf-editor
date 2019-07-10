@@ -143,11 +143,11 @@ void mainModel4( out vec4 materials, in vec3 xyz ) {
 const fsFooter = `
 void main() {
   if (any(lessThanEqual(abs(v_xyz.xyz),u_ll))) {
-    out_FragColor = vec4(1);  // DEBUG
+    // out_FragColor = vec4(1);  // DEBUG
     return;
   }
   if (any(greaterThanEqual(abs(v_xyz.xyz),u_ur))) {
-    out_FragColor = vec4(1);  // DEBUG
+    // out_FragColor = vec4(1);  // DEBUG
     return;
   }
   if (u_numMaterials <= 4) {
@@ -545,15 +545,27 @@ function render() {
   // renderer.render(scene, activeCamera);
   // // }
 
-  const [llz, urz] = calcViewportMBB();
-  const zstep = (urz - llz) / uniforms.u_resolution.value.z;
-  for (let z = llz; z <= urz; z += zstep) {
-    modelMesh.position.z = z;
+  const [minD, maxD] = calcViewportMBB();
+  // console.log('minD=', minD, ', maxD=', maxD);
+  const dStep = (maxD - minD) / uniforms.u_resolution.value.z;
+  for (let d = minD; d <= maxD; d += dStep) {
+    // modelMesh.position.z = d;
+
+    // Make a plane |d| distance from the camera along the camera's local axis.
+    // const cameraWorldDirection = new THREE.Vector3();
+    // activeCamera.getWorldDirection(cameraWorldDirection);
+    // console.log('GML1: ', cameraWorldDirection);
+    // cameraWorldDirection.normalize();
+    // console.log('GML1.5: ', cameraWorldDirection);
+    // cameraWorldDirection.multiplyScalar(Math.abs(d));
+    // console.log('GML2: ', cameraWorldDirection);
+    // cameraWorldDirection.add(activeCamera.position);
+    // console.log('GML3: ', cameraWorldDirection);
+    // modelMesh.position.copy(cameraWorldDirection);
+    // console.log('GML4: ', modelMesh.position);;
     modelMesh.quaternion.copy(activeCamera.quaternion);
-    // modelMesh.lookAt(activeCamera.position);
-    // uniforms.u_matrix.value.copy(modelMesh.matrixWorld);
-    // uniforms.u_matrix.value.copy(modelMesh.matrix);
-    // uniforms.u_matrix.value.copy(modelMesh.modelViewMatrix);
+
+    // modelMesh.quaternion.copy(activeCamera.quaternion);
     uniforms.u_matrix.value.compose(modelMesh.position, activeCamera.quaternion, modelMesh.scale);
     // uniforms.u_matrix.value.set(
     //   modelMesh.scale.x, 0, 0, 0,
