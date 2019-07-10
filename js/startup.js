@@ -142,6 +142,14 @@ void mainModel4( out vec4 materials, in vec3 xyz ) {
 `;
 const fsFooter = `
 void main() {
+  if (any(lessThanEqual(abs(v_xyz.xyz),u_ll))) {
+    out_FragColor = vec4(1);  // DEBUG
+    return;
+  }
+  if (any(greaterThanEqual(abs(v_xyz.xyz),u_ur))) {
+    out_FragColor = vec4(1);  // DEBUG
+    return;
+  }
   if (u_numMaterials <= 4) {
     vec4 materials;
     mainModel4(materials, v_xyz.xyz);
@@ -185,11 +193,6 @@ renderer.autoClear = false;
 const light = new THREE.DirectionalLight(0xFFFFFF, 1);
 light.position.set(-1, 2, 4);
 scene.add(light);
-// Just to help with debugging...
-// const debugGeometry = new THREE.PlaneBufferGeometry();
-// const debugMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide, transparent: false });
-// const debugMesh = new THREE.Mesh(debugGeometry, debugMaterial);
-// scene.add(debugMesh);
 
 const uniforms = {
   u_ll: { type: 'v3', value: new THREE.Vector3() }, // MBB min
@@ -225,12 +228,8 @@ uniforms.u_resolution.value.x = 128;
 uniforms.u_resolution.value.y = 128;
 uniforms.u_resolution.value.z = 128;
 // TODO: Take these from the editor.
-uniforms.u_ll.value.x = -5;
-uniforms.u_ll.value.y = -5;
-uniforms.u_ll.value.z = -5;
-uniforms.u_ur.value.x = 5;
-uniforms.u_ur.value.y = 5;
-uniforms.u_ur.value.z = 5;
+uniforms.u_ll.value.set(-5, -5, -5);
+uniforms.u_ur.value.set(5, 5, 5);
 // TODO: Make this configurable from the editor.
 modelMesh.position.addVectors(uniforms.u_ll.value, uniforms.u_ur.value);
 modelMesh.position.multiplyScalar(0.5);
@@ -498,20 +497,70 @@ function animate() {
   controls.update();
   requestAnimationFrame(animate);
 }
+function calcViewportMBB() {
+  const mvi = activeCamera.matrixWorldInverse;
+  // let llx = 1e6;
+  // let lly = 1e6;
+  let llz = 1e6;
+  // let urx = -1e6;
+  // let ury = -1e6;
+  let urz = -1e6;
+  const updateMBB = function (pt) {
+    pt.applyMatrix4(mvi);
+    // if (pt.x < llx) { llx = pt.x }
+    // if (pt.y < lly) { lly = pt.y }
+    if (pt.z < llz) { llz = pt.z }
+    // if (pt.x > urx) { urx = pt.x }
+    // if (pt.y > ury) { ury = pt.y }
+    if (pt.z > urz) { urz = pt.z }
+  }
+  const ll = uniforms.u_ll.value;
+  const ur = uniforms.u_ur.value;
+  updateMBB(new THREE.Vector4(ll.x, ll.y, ll.z, 1));
+  updateMBB(new THREE.Vector4(ll.x, ll.y, ur.z, 1));
+  updateMBB(new THREE.Vector4(ll.x, ur.y, ll.z, 1));
+  updateMBB(new THREE.Vector4(ll.x, ur.y, ur.z, 1));
+  updateMBB(new THREE.Vector4(ur.x, ll.y, ll.z, 1));
+  updateMBB(new THREE.Vector4(ur.x, ll.y, ur.z, 1));
+  updateMBB(new THREE.Vector4(ur.x, ur.y, ll.z, 1));
+  updateMBB(new THREE.Vector4(ur.x, ur.y, ur.z, 1));
+  // console.log(llx, lly, llz, urx, ury, urz);
+  return [llz, urz];
+}
 function render() {
   // cameraHelper.update();
   renderer.clear();
 
-  const zstep = (uniforms.u_ur.value.z - uniforms.u_ll.value.z) / uniforms.u_resolution.value.z;
-  for (let z = uniforms.u_ll.value.z; z <= uniforms.u_ur.value.z; z += zstep) {
-    modelMesh.position.z = z;
-    uniforms.u_matrix.value.set(
-      modelMesh.scale.x, 0, 0, 0,
-      0, modelMesh.scale.y, 0, 0,
-      0, 0, 0, z,
-      0, 0, 0, 1,
-    );
+  // // const zstep = (uniforms.u_ur.value.z - uniforms.u_ll.value.z) / uniforms.u_resolution.value.z;
+  // // for (let z = uniforms.u_ll.value.z; z <= uniforms.u_ur.value.z; z += zstep) {
+  // let z = 0;
+  // modelMesh.position.z = z;
+  // uniforms.u_matrix.value.set(
+  //   modelMesh.scale.x, 0, 0, 0,
+  //   0, modelMesh.scale.y, 0, 0,
+  //   0, 0, 0, z,
+  //   0, 0, 0, 1,
+  // );
 
+  // renderer.render(scene, activeCamera);
+  // // }
+
+  const [llz, urz] = calcViewportMBB();
+  const zstep = (urz - llz) / uniforms.u_resolution.value.z;
+  for (let z = llz; z <= urz; z += zstep) {
+    modelMesh.position.z = z;
+    modelMesh.quaternion.copy(activeCamera.quaternion);
+    // modelMesh.lookAt(activeCamera.position);
+    // uniforms.u_matrix.value.copy(modelMesh.matrixWorld);
+    // uniforms.u_matrix.value.copy(modelMesh.matrix);
+    // uniforms.u_matrix.value.copy(modelMesh.modelViewMatrix);
+    uniforms.u_matrix.value.compose(modelMesh.position, activeCamera.quaternion, modelMesh.scale);
+    // uniforms.u_matrix.value.set(
+    //   modelMesh.scale.x, 0, 0, 0,
+    //   0, modelMesh.scale.y, 0, 0,
+    //   0, 0, 0, z,
+    //   0, 0, 0, 1,
+    // );
     renderer.render(scene, activeCamera);
   }
 
