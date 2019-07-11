@@ -142,6 +142,7 @@ func loadSource() string {
 
 	resp, err := http.Get(location)
 	if err != nil {
+		fmt.Printf("Unable to download source from: %v\n", location)
 		window.Alert2("unable to load IRMF shader")
 		return ""
 	}
