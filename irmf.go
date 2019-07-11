@@ -60,36 +60,55 @@ func parseJSON(s string) (*irmf, error) {
 	return result, nil
 }
 
-func (i *irmf) validate() error {
+func (i *irmf) validate(jsonBlobStr string) (int, error) {
 	if i.IRMF != "1.0" {
-		return fmt.Errorf("unsupported IRMF version: %v", i.IRMF)
+		return findKeyLine(jsonBlobStr, "irmf"), fmt.Errorf("unsupported IRMF version: %v", i.IRMF)
 	}
 	if len(i.Materials) < 1 {
-		return errors.New("must list at least one material name")
+		return findKeyLine(jsonBlobStr, "materials"), errors.New("must list at least one material name")
 	}
 	if len(i.Materials) > 16 {
-		return fmt.Errorf("IRMF 1.0 only supports up to 16 materials, found %v", len(i.Materials))
+		return findKeyLine(jsonBlobStr, "materials"), fmt.Errorf("IRMF 1.0 only supports up to 16 materials, found %v", len(i.Materials))
 	}
 	if len(i.Max) != 3 {
-		return fmt.Errorf("max must have only 3 values, found %v", len(i.Max))
+		return findKeyLine(jsonBlobStr, "max"), fmt.Errorf("max must have only 3 values, found %v", len(i.Max))
 	}
 	if len(i.Min) != 3 {
-		return fmt.Errorf("min must have only 3 values, found %v", len(i.Min))
+		return findKeyLine(jsonBlobStr, "min"), fmt.Errorf("min must have only 3 values, found %v", len(i.Min))
 	}
 	if i.Units == "" {
-		return errors.New("units are required by IRMF 1.0 (even though the irmf-editor ignores the units)")
+		return findKeyLine(jsonBlobStr, "units"), errors.New("units are required by IRMF 1.0 (even though the irmf-editor ignores the units)")
 	}
 	if i.Min[0] >= i.Max[0] {
-		return fmt.Errorf("min.x (%v) must be strictly less than max.x (%v)", i.Min[0], i.Max[0])
+		return findKeyLine(jsonBlobStr, "max"), fmt.Errorf("min.x (%v) must be strictly less than max.x (%v)", i.Min[0], i.Max[0])
 	}
 	if i.Min[1] >= i.Max[1] {
-		return fmt.Errorf("min.y (%v) must be strictly less than max.y (%v)", i.Min[1], i.Max[1])
+		return findKeyLine(jsonBlobStr, "max"), fmt.Errorf("min.y (%v) must be strictly less than max.y (%v)", i.Min[1], i.Max[1])
 	}
 	if i.Min[2] >= i.Max[2] {
-		return fmt.Errorf("min.z (%v) must be strictly less than max.z (%v)", i.Min[2], i.Max[2])
+		return findKeyLine(jsonBlobStr, "max"), fmt.Errorf("min.z (%v) must be strictly less than max.z (%v)", i.Min[2], i.Max[2])
 	}
 
-	return nil
+	return 0, nil
+}
+
+func findKeyLine(s, key string) int {
+	if i := strings.Index(s, fmt.Sprintf("%q:", key)); i >= 0 {
+		return indexToLineNum(s, i)
+	}
+	if i := strings.Index(s, fmt.Sprintf("%v:", key)); i >= 0 {
+		return indexToLineNum(s, i)
+	}
+	if i := strings.Index(s, key); i >= 0 {
+		return indexToLineNum(s, i)
+	}
+	fmt.Printf("Falling back to 2: s=%q, key=%q", s, key)
+	return 2 // Fall back to top of json blob.
+}
+
+func indexToLineNum(s string, offset int) int {
+	s = s[:offset]
+	return strings.Count(s, "\n") + 1
 }
 
 func (i *irmf) format(shaderSrc string) (string, error) {

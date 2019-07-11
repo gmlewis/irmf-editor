@@ -57,9 +57,28 @@ func compileShader(this js.Value, args []js.Value) interface{} {
 	fmt.Println("Go compileShader called!")
 	src := editor.Call("getValue").String()
 
-	endJSON := strings.Index(src, "\n}*/\n")
 	lines := strings.Split(src, "\n")
-	if lines[0] != "/*{" || endJSON < 0 {
+	if lines[0] != "/*{" {
+		fmt.Println(`Unable to find leading "/*{"`) // TODO: Turn errors into hover-over text.
+		js.Global().Call("highlightShaderError", 1)
+		return nil
+	}
+	endJSON := strings.Index(src, "\n}*/\n")
+	if endJSON < 0 {
+		fmt.Println(`Unable to find trailing "}*/"`)
+		// Try to find the end of the JSON blob.
+		if lineNum := findKeyLine(src, "*/"); lineNum > 2 {
+			js.Global().Call("highlightShaderError", lineNum)
+			return nil
+		}
+		if lineNum := findKeyLine(src, "}*"); lineNum > 2 {
+			js.Global().Call("highlightShaderError", lineNum)
+			return nil
+		}
+		if lineNum := findKeyLine(src, "}"); lineNum > 2 {
+			js.Global().Call("highlightShaderError", lineNum)
+			return nil
+		}
 		js.Global().Call("highlightShaderError", 1)
 		return nil
 	}
@@ -72,13 +91,14 @@ func compileShader(this js.Value, args []js.Value) interface{} {
 		js.Global().Call("highlightShaderError", 2)
 		return nil
 	}
-	if err := jsonBlob.validate(); err != nil {
+	if lineNum, err := jsonBlob.validate(jsonBlobStr); err != nil {
 		fmt.Printf("Invalid JSON blob: %v", err)
-		js.Global().Call("highlightShaderError", 2)
+		js.Global().Call("highlightShaderError", lineNum)
 		return nil
 	}
 
 	shaderSrc := src[endJSON+5:]
+	// TODO: Figure out how to preserve the cursor location on rewrite.
 	// Rewrite the editor buffer:
 	newShader, err := jsonBlob.format(shaderSrc)
 	if err != nil {
