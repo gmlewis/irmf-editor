@@ -252,8 +252,9 @@ function loadNewModel(source) {
   // for getting the GLSL compiler errors and report them in the editor.
   if (modelMesh != null) {
     modelMesh.material = material;
+    material.needsUpdate = true;
+    render();
   }
-  material.needsUpdate = true;
 }
 loadNewModel(fsModel);
 modelMesh = new THREE.Mesh(modelGeometry, material);

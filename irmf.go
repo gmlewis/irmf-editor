@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 )
 
@@ -22,23 +23,30 @@ type irmf struct {
 	Version   string          `json:"version"`
 }
 
-var jsonKeys = []string{
-	"author",
-	"copyright",
-	"date",
-	"irmf",
-	"materials",
-	"max",
-	"min",
-	"notes",
-	"options",
-	"title",
-	"units",
-	"version",
-}
+var (
+	jsonKeys = []string{
+		"author",
+		"copyright",
+		"date",
+		"irmf",
+		"materials",
+		"max",
+		"min",
+		"notes",
+		"options",
+		"title",
+		"units",
+		"version",
+	}
+	trailingCommaRE = regexp.MustCompile(`,[\s\n]*}`)
+)
 
 func parseJSON(s string) (*irmf, error) {
 	result := &irmf{}
+
+	// Avoid the trailing comma silliness in JavaScript:
+	s = trailingCommaRE.ReplaceAllString(s, "}")
+
 	if err := json.Unmarshal([]byte(s), result); err != nil {
 		for _, key := range jsonKeys {
 			s = strings.Replace(s, key+":", fmt.Sprintf("%q:", key), 1)
