@@ -33,14 +33,35 @@ window.MonacoEnvironment = {
   }
 };
 
-const compileShader = function () {
-  console.log('TODO: Compile shader.');
+let goCallback = null;
+let decorations = [];
+let compileShader = function () {
+  if (goCallback == null) {
+    console.log('TODO: Compile shader.');
+  } else {
+    // Clear decorations.
+    decorations = editor.deltaDecorations(decorations, []);
+    goCallback();
+  }
 };
-const renderModel = function () {
-  console.log('TODO: Render model.');
-};
+function installCompileShader(cb) {
+  goCallback = cb;
+}
 
 let editor = null;
+function highlightShaderError(line) {
+  decorations = editor.deltaDecorations([], [
+    {
+      range: new monaco.Range(line, 1, line, 1),
+      options: {
+        isWholeLine: true,
+        className: 'contentErrorClass',
+        glyphMarginClassName: 'glyphMarginErrorClass'
+      }
+    }
+  ]);
+}
+function getEditor() { return editor; }
 require(["vs/editor/editor.main"], function () {
   monaco.editor.defineTheme('myCustomTheme', {
     base: 'vs-dark', // can also be vs or hc-black
@@ -70,12 +91,13 @@ require(["vs/editor/editor.main"], function () {
     theme: "myCustomTheme",
     minimap: {
       enabled: false
-    }
+    },
+    glyphMargin: true
   });
   editor.updateOptions({ wordWrap: "on" });
 
   // Add Ctrl/Cmd-Enter to render updated model:
-  const myBinding = editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, renderModel);
+  const myBinding = editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, compileShader);
 
   console.log('editor started');
   function twoDivResized() {
@@ -220,8 +242,21 @@ const uniforms = {
 };
 // const modelGeometry = new THREE.BoxGeometry(1, 1, 1);
 const modelGeometry = new THREE.PlaneBufferGeometry(2, 2);
-const material = new THREE.ShaderMaterial({ uniforms, vertexShader: vs, fragmentShader: fsHeader + fsModel + fsFooter, side: THREE.DoubleSide, transparent: true });
-const modelMesh = new THREE.Mesh(modelGeometry, material);
+let material = null;
+let modelMesh = null;
+function loadNewModel(source) {
+  console.log("Compiling new model:\n" + source);
+  material = new THREE.ShaderMaterial({ uniforms, vertexShader: vs, fragmentShader: fsHeader + source + fsFooter, side: THREE.DoubleSide, transparent: true });
+  // TODO: Check https://github.com/mrdoob/three.js/pull/6818
+  // and https://github.com/mrdoob/three.js/pull/6963
+  // for getting the GLSL compiler errors and report them in the editor.
+  if (modelMesh != null) {
+    modelMesh.material = material;
+  }
+  material.needsUpdate = true;
+}
+loadNewModel(fsModel);
+modelMesh = new THREE.Mesh(modelGeometry, material);
 scene.add(modelMesh);
 // TODO: Make this a slider in the display.
 uniforms.u_resolution.value.x = 128;

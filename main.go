@@ -24,7 +24,8 @@ func main() {
 
 	// Wait until JS is initialized
 	f := func() {
-		editor = js.Global().Get("editor")
+		v := js.Global().Get("getEditor")
+		editor = v.Invoke()
 		canvas = window.Document().GetElementById("canvas")
 	}
 	f()
@@ -32,14 +33,17 @@ func main() {
 		time.Sleep(100 * time.Millisecond)
 		f()
 	}
-	// Even though the editor is defined, it may not be initialized.
-	// Wait until it has its options set.
-	// f = func() bool {
-	// 	return editor.Call('')
-	// }
 
 	if source != "" {
 		editor.Call("setValue", source)
+	}
+
+	// Install compileShader callback.
+	cb := js.FuncOf(compileShader)
+	v := js.Global().Get("installCompileShader")
+	if v.Type() == js.TypeFunction {
+		fmt.Println("Installing compileShader callback")
+		v.Invoke(cb)
 	}
 
 	fmt.Println("Application irmf-editor is now started")
@@ -47,6 +51,38 @@ func main() {
 	// prevent program from terminating
 	c := make(chan struct{}, 0)
 	<-c
+}
+
+func compileShader(this js.Value, args []js.Value) interface{} {
+	fmt.Println("Go compileShader called!")
+	src := editor.Call("getValue").String()
+
+	endJSON := strings.Index(src, "\n}*/\n")
+	lines := strings.Split(src, "\n")
+	if lines[0] != "/*{" || endJSON < 0 {
+		js.Global().Call("highlightShaderError", 1)
+		return nil
+	}
+
+	jsonBlobStr := src[2 : endJSON+2]
+	fmt.Println(jsonBlobStr)
+	jsonBlob, err := parseJSON(jsonBlobStr)
+	if err != nil {
+		fmt.Printf("Unable to parse JSON blob: %v\n", err)
+		js.Global().Call("highlightShaderError", 2)
+		return nil
+	}
+	if err := jsonBlob.validate(); err != nil {
+		fmt.Printf("Invalid JSON blob: %v", err)
+		js.Global().Call("highlightShaderError", 2)
+		return nil
+	}
+
+	shaderSrc := src[endJSON+5:]
+	// fmt.Printf("Compiling new model shader:\n%v\n", shaderSrc)
+	js.Global().Call("loadNewModel", shaderSrc)
+
+	return nil
 }
 
 func loadSource() string {
