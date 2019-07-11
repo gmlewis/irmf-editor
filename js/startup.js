@@ -90,7 +90,7 @@ require(["vs/editor/editor.main"], function () {
   console.log('editor started');
   function twoDivResized() {
     canvas.width = twoDiv.offsetWidth;
-    canvas.height = twoDiv.offsetHeight;
+    canvas.height = twoDiv.offsetHeight - 100; // Keep in sync with 'logf' div height.
     editor.layout();
     onCanvasResize();
   }
