@@ -73,19 +73,7 @@ require(["vs/editor/editor.main"], function () {
     ]
   });
   editor = monaco.editor.create(document.getElementById('one'), {
-    value: [
-      '/*{',
-      '  irmf: "1.0",',
-      '  materials: ["PLA"],',
-      '  max: [10,10,10],',
-      '  min: [0,0,0],',
-      '  units: "mm",',
-      '}*/',
-      '',
-      'void mainModel4( out vec4 materials, in vec3 xyz ) {',
-      '  materials[0] = 1.0;',
-      '}'
-    ].join('\n'),
+    value: '',
     language: 'javascript',
     scrollBeyondLastLine: false,
     theme: "myCustomTheme",
@@ -120,7 +108,8 @@ out vec4 v_xyz;
 void main() {
   gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );
   // u_matrix maps the position to 3D model world space for the plane mesh.
-  v_xyz = u_matrix * vec4( position, 1.0 );
+  // v_xyz = u_matrix * vec4( position, 1.0 );
+  v_xyz = modelMatrix * vec4( position, 1.0 );
 }
 `;
 const fsHeader = `#version 300 es
@@ -148,19 +137,6 @@ uniform vec4 u_color15;
 uniform vec4 u_color16;
 in vec4 v_xyz;
 out vec4 out_FragColor;
-`;
-let fsModel = `
-// TODO: Take this model from the editor.
-float sphere(in vec3 pos, in float radius, in vec3 xyz) {
-  xyz -= pos;  // Move sphere into place.
-  float r = length(xyz);
-  return r <= radius ? 1.0 : 0.0;
-}
-
-void mainModel4( out vec4 materials, in vec3 xyz ) {
-  const float radius = 5.0;  // 10mm diameter sphere.
-  materials[0] = sphere(vec3(0), radius, xyz);
-}
 `;
 const fsFooter = `
 void main() {
@@ -240,25 +216,27 @@ const uniforms = {
   u_color15: { type: 'v4', value: new THREE.Vector4(1) },
   u_color16: { type: 'v4', value: new THREE.Vector4(1) },
 };
-// const modelGeometry = new THREE.BoxGeometry(1, 1, 1);
-const modelGeometry = new THREE.PlaneBufferGeometry(2, 2);
+// const modelGeometry = new THREE.PlaneBufferGeometry(2, 2);
 let material = null;
-let modelMesh = null;
+let modelCentroidNull = null;
+let modelMeshes = [];
 function loadNewModel(source) {
   console.log("Compiling new model:\n" + source);
   material = new THREE.ShaderMaterial({ uniforms, vertexShader: vs, fragmentShader: fsHeader + source + fsFooter, side: THREE.DoubleSide, transparent: true });
   // TODO: Check https://github.com/mrdoob/three.js/pull/6818
   // and https://github.com/mrdoob/three.js/pull/6963
   // for getting the GLSL compiler errors and report them in the editor.
-  if (modelMesh != null) {
-    modelMesh.material = material;
+  if (modelMeshes.length > 0) {
+    for (let i = 0; i < modelMeshes.length; i++) {
+      modelMeshes[i].material = material;
+    }
     material.needsUpdate = true;
     render();
   }
 }
-loadNewModel(fsModel);
-modelMesh = new THREE.Mesh(modelGeometry, material);
-scene.add(modelMesh);
+// loadNewModel(fsModel);
+// modelMesh = new THREE.Mesh(modelGeometry, material);
+// scene.add(modelMesh);
 // TODO: Make this a slider in the display.
 uniforms.u_resolution.value.x = 128;
 uniforms.u_resolution.value.y = 128;
@@ -269,13 +247,30 @@ function setMBB(llx, lly, llz, urx, ury, urz) {
   let maxval = (urx > ury) ? ury : ury;
   maxval = (maxval > urz) ? maxval : urz;
   resetCameraD = maxval;
+
+  scene.dispose();
+  modelCentroidNull = new THREE.Object3D()
+  scene.add(modelCentroidNull);
+
+  let maxDim = (urx - llx > ury - lly) ? (urx - llx) : (ury - lly);
+  maxDim = (maxDim > urz - llz) ? maxDim : (urz - llz);
+  maxDim *= Math.SQRT2;
+
+  const dStep = maxDim / uniforms.u_resolution.value.z;
+  for (let d = -0.5 * maxDim; d <= 0.5 * maxDim; d += dStep) {
+    let plane = new THREE.PlaneBufferGeometry(maxDim, maxDim);
+    let mesh = new THREE.Mesh(plane, material);
+    mesh.position.set(0, 0, d);
+    modelCentroidNull.add(mesh);
+    modelMeshes.push(mesh);
+  }
 }
-setMBB(-5, -5, -5, 5, 5, 5);
-// TODO: Make this configurable from the editor.
-modelMesh.position.addVectors(uniforms.u_ll.value, uniforms.u_ur.value);
-modelMesh.position.multiplyScalar(0.5);
-modelMesh.scale.subVectors(uniforms.u_ur.value, uniforms.u_ll.value);
-modelMesh.scale.multiplyScalar(0.5);
+// setMBB(-5, -5, -5, 5, 5, 5);
+// // TODO: Make this configurable from the editor.
+// modelMesh.position.addVectors(uniforms.u_ll.value, uniforms.u_ur.value);
+// modelMesh.position.multiplyScalar(0.5);
+// modelMesh.scale.subVectors(uniforms.u_ur.value, uniforms.u_ll.value);
+// modelMesh.scale.multiplyScalar(0.5);
 
 const hud = new THREE.Object3D();
 
@@ -538,53 +533,57 @@ function animate() {
   controls.update();
   requestAnimationFrame(animate);
 }
-function calcViewportMBB() {
-  const mvi = activeCamera.matrixWorldInverse;
-  // TODO: Make the plane fill the full size of the object.
-  let llx = 1e6;
-  let lly = 1e6;
-  let llz = 1e6;
-  let urx = -1e6;
-  let ury = -1e6;
-  let urz = -1e6;
-  const updateMBB = function (pt) {
-    pt.applyMatrix4(mvi);
-    if (pt.x < llx) { llx = pt.x }
-    if (pt.y < lly) { lly = pt.y }
-    if (pt.z < llz) { llz = pt.z }
-    if (pt.x > urx) { urx = pt.x }
-    if (pt.y > ury) { ury = pt.y }
-    if (pt.z > urz) { urz = pt.z }
-  }
-  const ll = uniforms.u_ll.value;
-  const ur = uniforms.u_ur.value;
-  updateMBB(new THREE.Vector4(ll.x, ll.y, ll.z, 1));
-  updateMBB(new THREE.Vector4(ll.x, ll.y, ur.z, 1));
-  updateMBB(new THREE.Vector4(ll.x, ur.y, ll.z, 1));
-  updateMBB(new THREE.Vector4(ll.x, ur.y, ur.z, 1));
-  updateMBB(new THREE.Vector4(ur.x, ll.y, ll.z, 1));
-  updateMBB(new THREE.Vector4(ur.x, ll.y, ur.z, 1));
-  updateMBB(new THREE.Vector4(ur.x, ur.y, ll.z, 1));
-  updateMBB(new THREE.Vector4(ur.x, ur.y, ur.z, 1));
-  // console.log(llx, lly, llz, urx, ury, urz);
-  return [llx, lly, llz, urx, ury, urz];
-}
+// function calcViewportMBB() {
+//   const mvi = activeCamera.matrixWorldInverse;
+//   // TODO: Make the plane fill the full size of the object.
+//   let llx = 1e6;
+//   let lly = 1e6;
+//   let llz = 1e6;
+//   let urx = -1e6;
+//   let ury = -1e6;
+//   let urz = -1e6;
+//   const updateMBB = function (pt) {
+//     pt.applyMatrix4(mvi);
+//     if (pt.x < llx) { llx = pt.x }
+//     if (pt.y < lly) { lly = pt.y }
+//     if (pt.z < llz) { llz = pt.z }
+//     if (pt.x > urx) { urx = pt.x }
+//     if (pt.y > ury) { ury = pt.y }
+//     if (pt.z > urz) { urz = pt.z }
+//   }
+//   const ll = uniforms.u_ll.value;
+//   const ur = uniforms.u_ur.value;
+//   updateMBB(new THREE.Vector4(ll.x, ll.y, ll.z, 1));
+//   updateMBB(new THREE.Vector4(ll.x, ll.y, ur.z, 1));
+//   updateMBB(new THREE.Vector4(ll.x, ur.y, ll.z, 1));
+//   updateMBB(new THREE.Vector4(ll.x, ur.y, ur.z, 1));
+//   updateMBB(new THREE.Vector4(ur.x, ll.y, ll.z, 1));
+//   updateMBB(new THREE.Vector4(ur.x, ll.y, ur.z, 1));
+//   updateMBB(new THREE.Vector4(ur.x, ur.y, ll.z, 1));
+//   updateMBB(new THREE.Vector4(ur.x, ur.y, ur.z, 1));
+//   // console.log(llx, lly, llz, urx, ury, urz);
+//   return [llx, lly, llz, urx, ury, urz];
+// }
 function render() {
   renderer.clear();
 
-  const [minX, minY, minD, maxX, maxY, maxD] = calcViewportMBB();
-  // modelMesh.position.x = 0.5 * (minX + maxX);
-  // modelMesh.position.y = 0.5 * (minY + maxY);
-  // modelMesh.scale.x = maxX - minX;
-  // modelMesh.scale.y = maxY - minY;
-  // console.log('minD=', minD, ', maxD=', maxD);
-  const dStep = (maxD - minD) / uniforms.u_resolution.value.z;
-  for (let d = minD; d <= maxD; d += dStep) {
-    // modelMesh.position.z = d;
-    modelMesh.quaternion.copy(activeCamera.quaternion);
-    uniforms.u_matrix.value.compose(modelMesh.position, activeCamera.quaternion, modelMesh.scale);
-    renderer.render(scene, activeCamera);
+  // const [minX, minY, minD, maxX, maxY, maxD] = calcViewportMBB();
+  // // modelMesh.position.x = 0.5 * (minX + maxX);
+  // // modelMesh.position.y = 0.5 * (minY + maxY);
+  // // modelMesh.scale.x = maxX - minX;
+  // // modelMesh.scale.y = maxY - minY;
+  // // console.log('minD=', minD, ', maxD=', maxD);
+  // const dStep = (maxD - minD) / uniforms.u_resolution.value.z;
+  // for (let d = minD; d <= maxD; d += dStep) {
+  //   // modelMesh.position.z = d;
+  //   modelMesh.quaternion.copy(activeCamera.quaternion);
+  //   uniforms.u_matrix.value.compose(modelMesh.position, activeCamera.quaternion, modelMesh.scale);
+  //   renderer.render(scene, activeCamera);
+  // }
+  if (modelCentroidNull != null) {
+    modelCentroidNull.lookAt(activeCamera.position);
   }
+  renderer.render(scene, activeCamera);
 
   activateHudViewport();
   renderer.clearDepth();

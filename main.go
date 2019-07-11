@@ -34,16 +34,18 @@ func main() {
 		f()
 	}
 
-	if source != "" {
-		editor.Call("setValue", source)
-	}
-
 	// Install compileShader callback.
 	cb := js.FuncOf(compileShader)
 	v := js.Global().Get("installCompileShader")
 	if v.Type() == js.TypeFunction {
 		fmt.Println("Installing compileShader callback")
 		v.Invoke(cb)
+	}
+
+	if source != "" {
+		initShader(source)
+	} else {
+		initShader(startupShader)
 	}
 
 	fmt.Println("Application irmf-editor is now started")
@@ -56,7 +58,10 @@ func main() {
 func compileShader(this js.Value, args []js.Value) interface{} {
 	fmt.Println("Go compileShader called!")
 	src := editor.Call("getValue").String()
+	return initShader(src)
+}
 
+func initShader(src string) interface{} {
 	lines := strings.Split(src, "\n")
 	if lines[0] != "/*{" {
 		fmt.Println(`Unable to find leading "/*{"`) // TODO: Turn errors into hover-over text.
@@ -149,3 +154,23 @@ func loadSource() string {
 	fmt.Printf("Read %v bytes from GitHub.\n", len(buf))
 	return string(buf)
 }
+
+const startupShader = `/*{
+  irmf: "1.0",
+  materials: ["PLA"],
+  max: [5,5,5],
+  min: [-5,-5,-5],
+  units: "mm",
+}*/
+
+float sphere(in vec3 pos, in float radius, in vec3 xyz) {
+  xyz -= pos;  // Move sphere into place.
+  float r = length(xyz);
+  return r <= radius ? 1.0 : 0.0;
+}
+
+void mainModel4( out vec4 materials, in vec3 xyz ) {
+  const float radius = 5.0;  // 10mm diameter sphere.
+  materials[0] = sphere(vec3(0), radius, xyz);
+}
+`
