@@ -39,6 +39,8 @@ var (
 		"version",
 	}
 	trailingCommaRE = regexp.MustCompile(`,[\s\n]*}`)
+	arrayRE         = regexp.MustCompile(`\[([^\]]+)\]`)
+	whitespaceRE    = regexp.MustCompile(`[\s\n]+`)
 )
 
 func parseJSON(s string) (*irmf, error) {
@@ -88,4 +90,21 @@ func (i *irmf) validate() error {
 	}
 
 	return nil
+}
+
+func (i *irmf) format(shaderSrc string) (string, error) {
+	buf, err := json.MarshalIndent(i, "", "  ")
+	if err != nil {
+		return "", fmt.Errorf("unable to format IRMF shader: %v", err)
+	}
+
+	jsonBlob := string(buf)
+
+	// Clean up the JSON.
+	jsonBlob = strings.Replace(jsonBlob, `"options": null,`, `"options": {},`, 1)
+	jsonBlob = arrayRE.ReplaceAllStringFunc(jsonBlob, func(s string) string {
+		return whitespaceRE.ReplaceAllString(s, "")
+	})
+
+	return fmt.Sprintf("/*%v*/\n%v", jsonBlob, shaderSrc), nil
 }

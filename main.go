@@ -79,6 +79,14 @@ func compileShader(this js.Value, args []js.Value) interface{} {
 	}
 
 	shaderSrc := src[endJSON+5:]
+	// Rewrite the editor buffer:
+	newShader, err := jsonBlob.format(shaderSrc)
+	if err != nil {
+		fmt.Printf("Error: %v", err)
+	} else {
+		editor.Call("setValue", newShader)
+	}
+
 	// fmt.Printf("Compiling new model shader:\n%v\n", shaderSrc)
 	js.Global().Call("loadNewModel", shaderSrc)
 
