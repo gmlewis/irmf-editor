@@ -13,9 +13,10 @@ import (
 )
 
 var (
-	window *webapi.Window
-	editor js.Value
-	canvas *dom.Element
+	window  *webapi.Window
+	editor  js.Value
+	canvas  *dom.Element
+	logfDiv *dom.Element
 )
 
 func main() {
@@ -26,10 +27,12 @@ func main() {
 	f := func() {
 		v := js.Global().Get("getEditor")
 		editor = v.Invoke()
-		canvas = window.Document().GetElementById("canvas")
+		doc := window.Document()
+		canvas = doc.GetElementById("canvas")
+		logfDiv = doc.GetElementById("logf")
 	}
 	f()
-	for editor.Type() == js.TypeNull || editor.Type() == js.TypeUndefined || canvas == nil {
+	for editor.Type() == js.TypeNull || editor.Type() == js.TypeUndefined || canvas == nil || logfDiv == nil {
 		time.Sleep(100 * time.Millisecond)
 		f()
 	}
@@ -38,7 +41,7 @@ func main() {
 	cb := js.FuncOf(compileShader)
 	v := js.Global().Get("installCompileShader")
 	if v.Type() == js.TypeFunction {
-		fmt.Println("Installing compileShader callback")
+		logf("Installing compileShader callback")
 		v.Invoke(cb)
 	}
 
@@ -48,7 +51,7 @@ func main() {
 		initShader(startupShader)
 	}
 
-	fmt.Println("Application irmf-editor is now started")
+	logf("Application irmf-editor is now started")
 
 	// prevent program from terminating
 	c := make(chan struct{}, 0)
@@ -56,7 +59,8 @@ func main() {
 }
 
 func compileShader(this js.Value, args []js.Value) interface{} {
-	fmt.Println("Go compileShader called!")
+	clearLog()
+	logf("Go compileShader called!")
 	src := editor.Call("getValue").String()
 	return initShader(src)
 }
@@ -64,13 +68,13 @@ func compileShader(this js.Value, args []js.Value) interface{} {
 func initShader(src string) interface{} {
 	lines := strings.Split(src, "\n")
 	if lines[0] != "/*{" {
-		fmt.Println(`Unable to find leading "/*{"`) // TODO: Turn errors into hover-over text.
+		logf(`Unable to find leading "/*{"`) // TODO: Turn errors into hover-over text.
 		js.Global().Call("highlightShaderError", 1)
 		return nil
 	}
 	endJSON := strings.Index(src, "\n}*/\n")
 	if endJSON < 0 {
-		fmt.Println(`Unable to find trailing "}*/"`)
+		logf(`Unable to find trailing "}*/"`)
 		// Try to find the end of the JSON blob.
 		if lineNum := findKeyLine(src, "*/"); lineNum > 2 {
 			js.Global().Call("highlightShaderError", lineNum)
@@ -89,15 +93,15 @@ func initShader(src string) interface{} {
 	}
 
 	jsonBlobStr := src[2 : endJSON+2]
-	fmt.Println(jsonBlobStr)
+	// logf(jsonBlobStr)
 	jsonBlob, err := parseJSON(jsonBlobStr)
 	if err != nil {
-		fmt.Printf("Unable to parse JSON blob: %v\n", err)
+		logf("Unable to parse JSON blob: %v", err)
 		js.Global().Call("highlightShaderError", 2)
 		return nil
 	}
 	if lineNum, err := jsonBlob.validate(jsonBlobStr); err != nil {
-		fmt.Printf("Invalid JSON blob: %v", err)
+		logf("Invalid JSON blob: %v", err)
 		js.Global().Call("highlightShaderError", lineNum)
 		return nil
 	}
@@ -107,7 +111,7 @@ func initShader(src string) interface{} {
 	// Rewrite the editor buffer:
 	newShader, err := jsonBlob.format(shaderSrc)
 	if err != nil {
-		fmt.Printf("Error: %v", err)
+		logf("Error: %v", err)
 	} else {
 		editor.Call("setValue", newShader)
 	}
@@ -116,7 +120,7 @@ func initShader(src string) interface{} {
 	js.Global().Call("setMBB", jsonBlob.Min[0], jsonBlob.Min[1], jsonBlob.Min[2],
 		jsonBlob.Max[0], jsonBlob.Max[1], jsonBlob.Max[2])
 
-	// fmt.Printf("Compiling new model shader:\n%v\n", shaderSrc)
+	// logf("Compiling new model shader:\n%v", shaderSrc)
 	js.Global().Call("loadNewModel", shaderSrc)
 
 	return nil
@@ -128,7 +132,7 @@ func loadSource() string {
 	url := window.Location().Value_JS.String()
 	i := strings.Index(url, oldPrefix)
 	if i < 0 {
-		fmt.Println("No source requested in URL path.")
+		logf("No source requested in URL path.")
 		return ""
 	}
 	location := url[i+len(oldPrefix):]
@@ -142,18 +146,34 @@ func loadSource() string {
 
 	resp, err := http.Get(location)
 	if err != nil {
-		fmt.Printf("Unable to download source from: %v\n", location)
+		logf("Unable to download source from: %v", location)
 		window.Alert2("unable to load IRMF shader")
 		return ""
 	}
 	buf, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		fmt.Printf("Unable to ready response body.\n")
+		logf("Unable to ready response body.")
 		return ""
 	}
 	resp.Body.Close()
-	fmt.Printf("Read %v bytes from GitHub.\n", len(buf))
+	logf("Read %v bytes from GitHub.", len(buf))
 	return string(buf)
+}
+
+func clearLog() {
+	if logfDiv != nil {
+		logfDiv.SetInnerHTML("")
+	}
+}
+
+func logf(fmtStr string, args ...interface{}) {
+	if logfDiv != nil {
+		txt := logfDiv.InnerHTML()
+		txt += fmt.Sprintf("<div>"+fmtStr+"</div>", args...)
+		logfDiv.SetInnerHTML(txt)
+	} else {
+		fmt.Printf(fmtStr+"\n", args...)
+	}
 }
 
 const startupShader = `/*{
