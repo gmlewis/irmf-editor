@@ -198,7 +198,7 @@ console.log('canvas: (' + canvas.width.toString() + ',' + canvas.height.toString
 let activeCamera = null;
 let hudActiveCamera = null;
 const cameraPerspective = new THREE.PerspectiveCamera(fov, aspectRatio, 0.1, 1000);
-const resetCameraD = 5.0;
+let resetCameraD = 5.0;
 const frustumSize = 1.0;
 const hudFrustumSize = 1.25;
 const cameraOrthographic = new THREE.OrthographicCamera(
@@ -263,9 +263,14 @@ scene.add(modelMesh);
 uniforms.u_resolution.value.x = 128;
 uniforms.u_resolution.value.y = 128;
 uniforms.u_resolution.value.z = 128;
-// TODO: Take these from the editor.
-uniforms.u_ll.value.set(-5, -5, -5);
-uniforms.u_ur.value.set(5, 5, 5);
+function setMBB(llx, lly, llz, urx, ury, urz) {
+  uniforms.u_ll.value.set(llx, lly, llz);
+  uniforms.u_ur.value.set(urx, ury, urz);
+  let maxval = (urx > ury) ? ury : ury;
+  maxval = (maxval > urz) ? maxval : urz;
+  resetCameraD = maxval;
+}
+setMBB(-5, -5, -5, 5, 5, 5);
 // TODO: Make this configurable from the editor.
 modelMesh.position.addVectors(uniforms.u_ll.value, uniforms.u_ur.value);
 modelMesh.position.multiplyScalar(0.5);
@@ -535,19 +540,20 @@ function animate() {
 }
 function calcViewportMBB() {
   const mvi = activeCamera.matrixWorldInverse;
-  // let llx = 1e6;
-  // let lly = 1e6;
+  // TODO: Make the plane fill the full size of the object.
+  let llx = 1e6;
+  let lly = 1e6;
   let llz = 1e6;
-  // let urx = -1e6;
-  // let ury = -1e6;
+  let urx = -1e6;
+  let ury = -1e6;
   let urz = -1e6;
   const updateMBB = function (pt) {
     pt.applyMatrix4(mvi);
-    // if (pt.x < llx) { llx = pt.x }
-    // if (pt.y < lly) { lly = pt.y }
+    if (pt.x < llx) { llx = pt.x }
+    if (pt.y < lly) { lly = pt.y }
     if (pt.z < llz) { llz = pt.z }
-    // if (pt.x > urx) { urx = pt.x }
-    // if (pt.y > ury) { ury = pt.y }
+    if (pt.x > urx) { urx = pt.x }
+    if (pt.y > ury) { ury = pt.y }
     if (pt.z > urz) { urz = pt.z }
   }
   const ll = uniforms.u_ll.value;
@@ -561,54 +567,22 @@ function calcViewportMBB() {
   updateMBB(new THREE.Vector4(ur.x, ur.y, ll.z, 1));
   updateMBB(new THREE.Vector4(ur.x, ur.y, ur.z, 1));
   // console.log(llx, lly, llz, urx, ury, urz);
-  return [llz, urz];
+  return [llx, lly, llz, urx, ury, urz];
 }
 function render() {
-  // cameraHelper.update();
   renderer.clear();
 
-  // // const zstep = (uniforms.u_ur.value.z - uniforms.u_ll.value.z) / uniforms.u_resolution.value.z;
-  // // for (let z = uniforms.u_ll.value.z; z <= uniforms.u_ur.value.z; z += zstep) {
-  // let z = 0;
-  // modelMesh.position.z = z;
-  // uniforms.u_matrix.value.set(
-  //   modelMesh.scale.x, 0, 0, 0,
-  //   0, modelMesh.scale.y, 0, 0,
-  //   0, 0, 0, z,
-  //   0, 0, 0, 1,
-  // );
-
-  // renderer.render(scene, activeCamera);
-  // // }
-
-  const [minD, maxD] = calcViewportMBB();
+  const [minX, minY, minD, maxX, maxY, maxD] = calcViewportMBB();
+  // modelMesh.position.x = 0.5 * (minX + maxX);
+  // modelMesh.position.y = 0.5 * (minY + maxY);
+  // modelMesh.scale.x = maxX - minX;
+  // modelMesh.scale.y = maxY - minY;
   // console.log('minD=', minD, ', maxD=', maxD);
   const dStep = (maxD - minD) / uniforms.u_resolution.value.z;
   for (let d = minD; d <= maxD; d += dStep) {
     // modelMesh.position.z = d;
-
-    // Make a plane |d| distance from the camera along the camera's local axis.
-    // const cameraWorldDirection = new THREE.Vector3();
-    // activeCamera.getWorldDirection(cameraWorldDirection);
-    // console.log('GML1: ', cameraWorldDirection);
-    // cameraWorldDirection.normalize();
-    // console.log('GML1.5: ', cameraWorldDirection);
-    // cameraWorldDirection.multiplyScalar(Math.abs(d));
-    // console.log('GML2: ', cameraWorldDirection);
-    // cameraWorldDirection.add(activeCamera.position);
-    // console.log('GML3: ', cameraWorldDirection);
-    // modelMesh.position.copy(cameraWorldDirection);
-    // console.log('GML4: ', modelMesh.position);;
     modelMesh.quaternion.copy(activeCamera.quaternion);
-
-    // modelMesh.quaternion.copy(activeCamera.quaternion);
     uniforms.u_matrix.value.compose(modelMesh.position, activeCamera.quaternion, modelMesh.scale);
-    // uniforms.u_matrix.value.set(
-    //   modelMesh.scale.x, 0, 0, 0,
-    //   0, modelMesh.scale.y, 0, 0,
-    //   0, 0, 0, z,
-    //   0, 0, 0, 1,
-    // );
     renderer.render(scene, activeCamera);
   }
 

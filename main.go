@@ -107,6 +107,10 @@ func compileShader(this js.Value, args []js.Value) interface{} {
 		editor.Call("setValue", newShader)
 	}
 
+	// Set the updated MBB:
+	js.Global().Call("setMBB", jsonBlob.Min[0], jsonBlob.Min[1], jsonBlob.Min[2],
+		jsonBlob.Max[0], jsonBlob.Max[1], jsonBlob.Max[2])
+
 	// fmt.Printf("Compiling new model shader:\n%v\n", shaderSrc)
 	js.Global().Call("loadNewModel", shaderSrc)
 
