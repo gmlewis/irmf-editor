@@ -72,6 +72,21 @@ manufacturers will be providing. They will figure out how to best
 slice your model at the highest resolutions possible so that you don't
 get jaggies in the resulting model.
 
+## Why is my model flat-shaded?
+
+Your model is flat-shaded because I haven't figured out yet how to
+do shading properly. What we are dealing with here is essentially
+a point cloud. How do you properly shade a point cloud?!?
+
+What we really need to do proper shading of the model is to have
+the surface normals. But currently, the renderer has absolutely no
+idea where the surface boundaries of your model are. It simply slices
+your model into a large number of planes, and splats pixels onto
+those planes where it finds material in your model. Because of the
+way we render the planes, the resulting picture appears to be a
+solid model but it is just a point cloud. Solutions to the problem
+are welcome. :smiley:
+
 ----------------------------------------------------------------------
 
 # License
