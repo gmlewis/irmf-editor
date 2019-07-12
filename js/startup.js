@@ -115,7 +115,8 @@ precision highp float;
 precision highp int;
 uniform vec3 u_ll;
 uniform vec3 u_ur;
-uniform vec3 u_resolution;
+// uniform vec3 u_resolution;
+// uniform float u_resolution;
 uniform int u_numMaterials;
 uniform vec4 u_color1;
 uniform vec4 u_color2;
@@ -193,7 +194,8 @@ const uniforms = {
   u_ll: { type: 'v3', value: new THREE.Vector3() }, // MBB min
   u_ur: { type: 'v3', value: new THREE.Vector3() },  // MBB max
   u_matrix: { type: 'm4', value: new THREE.Matrix4() },
-  u_resolution: { type: 'v3', value: new THREE.Vector3() },
+  // u_resolution: { type: 'v3', value: new THREE.Vector3() },
+  u_resolution: { type: 'float', value: 512.0 },
   u_numMaterials: { type: 'int', value: 1 },
   // TODO: Make all the colors configurable through the GUI.
   u_color1: { type: 'v4', value: new THREE.Vector4(1, 0, 0, 1) },
@@ -232,10 +234,6 @@ function loadNewModel(source) {
   }
 }
 
-// TODO: Make this a slider in the display.
-uniforms.u_resolution.value.x = 128;
-uniforms.u_resolution.value.y = 128;
-uniforms.u_resolution.value.z = 128;
 function getLookAt() {
   const ll = uniforms.u_ll.value;
   const ur = uniforms.u_ur.value;
@@ -261,7 +259,7 @@ function setMBB(llx, lly, llz, urx, ury, urz) {
   // TODO: make this a GUI option:
   scene.add(new THREE.AxesHelper(diagonal));
 
-  const dStep = diagonal / uniforms.u_resolution.value.z;
+  const dStep = diagonal / uniforms.u_resolution.value;
   for (let d = -0.5 * diagonal; d <= 0.5 * diagonal; d += dStep) {
     let plane = new THREE.PlaneBufferGeometry(diagonal, diagonal);
     let mesh = new THREE.Mesh(plane, material);
