@@ -102,7 +102,7 @@ func findKeyLine(s, key string) int {
 	if i := strings.Index(s, key); i >= 0 {
 		return indexToLineNum(s, i)
 	}
-	fmt.Printf("Falling back to 2: s=%q, key=%q", s, key)
+	logf("Falling back to 2: s=%q, key=%q", s, key)
 	return 2 // Fall back to top of json blob.
 }
 
