@@ -60,7 +60,7 @@ func parseJSON(s string) (*irmf, error) {
 	return result, nil
 }
 
-func (i *irmf) validate(jsonBlobStr string) (int, error) {
+func (i *irmf) validate(jsonBlobStr, shaderSrc string) (int, error) {
 	if i.IRMF != "1.0" {
 		return findKeyLine(jsonBlobStr, "irmf"), fmt.Errorf("unsupported IRMF version: %v", i.IRMF)
 	}
@@ -87,6 +87,18 @@ func (i *irmf) validate(jsonBlobStr string) (int, error) {
 	}
 	if i.Min[2] >= i.Max[2] {
 		return findKeyLine(jsonBlobStr, "max"), fmt.Errorf("min.z (%v) must be strictly less than max.z (%v)", i.Min[2], i.Max[2])
+	}
+
+	if len(i.Materials) <= 4 && strings.Index(shaderSrc, "mainModel4") < 0 {
+		return findKeyLine(jsonBlobStr, "materials"), fmt.Errorf("Found %v materials, but missing 'mainModel4' function", len(i.Materials))
+	}
+
+	if len(i.Materials) > 4 && len(i.Materials) <= 9 && strings.Index(shaderSrc, "mainModel9") < 0 {
+		return findKeyLine(jsonBlobStr, "materials"), fmt.Errorf("Found %v materials, but missing 'mainModel9' function", len(i.Materials))
+	}
+
+	if len(i.Materials) > 9 && len(i.Materials) <= 16 && strings.Index(shaderSrc, "mainModel16") < 0 {
+		return findKeyLine(jsonBlobStr, "materials"), fmt.Errorf("Found %v materials, but missing 'mainModel16' function", len(i.Materials))
 	}
 
 	return 0, nil

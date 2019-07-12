@@ -100,13 +100,15 @@ func initShader(src string) interface{} {
 		js.Global().Call("highlightShaderError", 2)
 		return nil
 	}
-	if lineNum, err := jsonBlob.validate(jsonBlobStr); err != nil {
+
+	shaderSrc := src[endJSON+5:]
+
+	if lineNum, err := jsonBlob.validate(jsonBlobStr, shaderSrc); err != nil {
 		logf("Invalid JSON blob: %v", err)
 		js.Global().Call("highlightShaderError", lineNum)
 		return nil
 	}
 
-	shaderSrc := src[endJSON+5:]
 	// TODO: Figure out how to preserve the cursor location on rewrite.
 	// Rewrite the editor buffer:
 	newShader, err := jsonBlob.format(shaderSrc)
