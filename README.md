@@ -41,6 +41,37 @@ their local filesystem to save it offline.
 This keeps the app super-simple and prevents abuse by not storing
 anything on the server.
 
+# FAQ
+
+## How does it work?
+
+This editor dices up your model (the IRMF shader) into slices (planes)
+that are perpendicular (normal) to your eye (the camera). Because the
+planes are all stacked together and render the model at different depths
+from your eye, it appears that you are being shown a solid, when in
+actuality, you are being shown a lot of very thin slices of your model
+all stacked together.
+
+TODO: Here is a picture showing what is happening:
+
+## Why do I see jaggies in my model?
+
+"I thought this thing had infinite resolution... what's up?"
+
+The IRMF shader itself has infinite resolution because it is just math,
+but we have to dice up the design in order to display it. We also
+need to keep it performant, so we need to limit the number of slices to
+render. But as a result of slicing the model, high detail models
+(especially those with curves) will show more jaggies than others.
+
+TODO: Here is a picture demonstrating the jaggies:
+
+The bottom line is that I haven't figured out how to render the object
+yet without jaggies. This too, will be the art that the 3D printer
+manufacturers will be providing. They will figure out how to best
+slice your model at the highest resolutions possible so that you don't
+get jaggies in the resulting model.
+
 ----------------------------------------------------------------------
 
 # License
