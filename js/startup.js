@@ -85,7 +85,10 @@ require(["vs/editor/editor.main"], function () {
   editor.updateOptions({ wordWrap: "on" });
 
   // Add Ctrl/Cmd-Enter to render updated model:
-  const myBinding = editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, compileShader);
+  editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, compileShader);
+  // Also support Ctrl/Cmd-s just out of sheer habit, but don't advertize this
+  // because it's not actually saving the shader anywhere... just compiling it.
+  editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KEY_S, compileShader);
 
   console.log('editor started');
   function twoDivResized() {
