@@ -13,10 +13,11 @@ import (
 )
 
 var (
-	window  *webapi.Window
-	editor  js.Value
-	canvas  *dom.Element
-	logfDiv *dom.Element
+	window      *webapi.Window
+	editor      js.Value
+	canvas      *dom.Element
+	logfDiv     *dom.Element
+	sliceButton *dom.Element
 )
 
 func main() {
@@ -30,9 +31,10 @@ func main() {
 		doc := window.Document()
 		canvas = doc.GetElementById("canvas")
 		logfDiv = doc.GetElementById("logf")
+		sliceButton = doc.GetElementById("slice-button")
 	}
 	f()
-	for editor.Type() == js.TypeNull || editor.Type() == js.TypeUndefined || canvas == nil || logfDiv == nil {
+	for editor.Type() == js.TypeNull || editor.Type() == js.TypeUndefined || canvas == nil || logfDiv == nil || sliceButton == nil {
 		time.Sleep(100 * time.Millisecond)
 		f()
 	}
@@ -43,6 +45,14 @@ func main() {
 	if v.Type() == js.TypeFunction {
 		logf("Installing compileShader callback")
 		v.Invoke(cb)
+	}
+
+	// Install slice-button callback.
+	cb2 := js.FuncOf(sliceShader)
+	v2 := js.Global().Get("installSliceShader")
+	if v2.Type() == js.TypeFunction {
+		logf("Installing sliceShader callback")
+		v2.Invoke(cb2)
 	}
 
 	if source != "" {

@@ -55,6 +55,12 @@
     .contentErrorClass {
       background: red;
     }
+
+    #slice-button {
+      position: absolute;
+      right: 20px;
+      top: 10px;
+    }
   </style>
 </head>
 
@@ -63,6 +69,7 @@
     <div class="split full-height" id="one" style="border:1px solid grey"></div>
     <div class="split full-height" id="two" style="border:1px solid grey;overflow:hidden">
       <canvas id="canvas" width="640" height="480"></canvas>
+      <button id='slice-button' onclick="goSliceCallback()">Slice it!</button>
       <div id="logf" style="height:100px;color:white">
         <div>Output messages from the compiler will appear here.</div>
         <div>Hit Ctrl-Enter or Cmd-Enter on Mac to recompile IRMF shader.</div>
