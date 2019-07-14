@@ -124,6 +124,8 @@ uniform vec3 u_ll;
 uniform vec3 u_ur;
 // uniform vec3 u_resolution;
 // uniform float u_resolution;
+uniform float u_mind;
+uniform float u_maxd;
 uniform int u_numMaterials;
 uniform vec4 u_color1;
 uniform vec4 u_color2;
@@ -154,11 +156,14 @@ void main() {
     // out_FragColor = vec4(1);  // DEBUG
     return;
   }
+
+  float d = (v_xyz.z - u_mind)/(u_maxd - u_mind);
   if (u_numMaterials <= 4) {
     vec4 materials;
     mainModel4(materials, v_xyz.xyz);
-    out_FragColor = u_color1*materials.x + u_color2*materials.y + u_color3*materials.z + u_color4*materials.w;
+    out_FragColor = d*(u_color1*materials.x + u_color2*materials.y + u_color3*materials.z + u_color4*materials.w);
     // out_FragColor = v_xyz/5.0 + 0.5;  // DEBUG
+    // out_FragColor = vec4(vec3(d), 1.);  // DEBUG
   // } else if (u_numMaterials <= 9) {
 
   // } else if (u_numMaterials <= 16) {
@@ -204,6 +209,8 @@ const uniforms = {
   // u_resolution: { type: 'v3', value: new THREE.Vector3() },
   u_resolution: { type: 'float', value: 512.0 },
   u_numMaterials: { type: 'int', value: 1 },
+  u_mind: { type: 'float', value: 0.0 },
+  u_maxd: { type: 'float', value: 1.0 },
   // TODO: Make all the colors configurable through the GUI.
   u_color1: { type: 'v4', value: new THREE.Vector4(1, 0, 0, 1) },
   u_color2: { type: 'v4', value: new THREE.Vector4(0, 1, 0, 1) },
@@ -267,7 +274,9 @@ function setMBB(llx, lly, llz, urx, ury, urz) {
   scene.add(new THREE.AxesHelper(diagonal));
 
   const dStep = diagonal / uniforms.u_resolution.value;
-  for (let d = -0.5 * diagonal; d <= 0.5 * diagonal; d += dStep) {
+  uniforms.u_mind.value = -0.5 * diagonal + 0.5 * dStep;
+  uniforms.u_maxd.value = 0.5 * diagonal;
+  for (let d = uniforms.u_mind.value; d <= uniforms.u_maxd.value; d += dStep) {
     let plane = new THREE.PlaneBufferGeometry(diagonal, diagonal);
     let mesh = new THREE.Mesh(plane, material);
     mesh.position.set(0, 0, d);
