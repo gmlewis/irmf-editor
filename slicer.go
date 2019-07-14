@@ -7,9 +7,7 @@ import (
 	"image"
 	"image/color"
 	"image/png"
-	_ "image/png"
-
-	"github.com/gowebapi/webapi/core/js"
+	"syscall/js"
 )
 
 func sliceShader(this js.Value, args []js.Value) interface{} {
@@ -38,7 +36,6 @@ func sliceShader(this js.Value, args []js.Value) interface{} {
 		logf("Unable to close ZIP: %v", err)
 		return nil
 	}
-	img.pixelBuffer.Release()
 	logf("Wrote %v bytes to ZIP file.", buf.Len())
 
 	return nil
@@ -51,17 +48,20 @@ func renderSlice(z float64) *imageBuf {
 	pixelBuffer := fn.Invoke()
 	logf("pixelBuffer=%v", pixelBuffer.Length())
 
-	v := js.TypedArrayOf([]uint8{})
-	return &imageBuf{pixelBuffer: v}
+	b := &imageBuf{}
+	// 	if n := js.CopyBytesToGo(b.pb, pixelBuffer); n != 4*512*512 {
+	// 		logf("Got %v bytes from pixelBuffer; want %v", 4*512*512)
+	// 	}
+	return b
 }
 
 type imageBuf struct {
-	pixelBuffer js.TypedArray
+	pb []byte
 }
 
 func (i *imageBuf) At(x, y int) color.Color {
 	ind := 4 * ((y * 512) + x)
-	return color.NRGBA{}
+	return color.NRGBA{R: i.pb[ind], G: i.pb[ind+1], B: i.pb[ind+2], A: i.pb[ind+3]}
 }
 
 func (i *imageBuf) Bounds() image.Rectangle {

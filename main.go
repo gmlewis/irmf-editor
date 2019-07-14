@@ -5,36 +5,36 @@ import (
 	"io/ioutil"
 	"net/http"
 	"strings"
+	"syscall/js"
 	"time"
-
-	"github.com/gowebapi/webapi"
-	"github.com/gowebapi/webapi/core/js"
-	"github.com/gowebapi/webapi/dom"
 )
 
 var (
-	window      *webapi.Window
 	editor      js.Value
-	canvas      *dom.Element
-	logfDiv     *dom.Element
-	sliceButton *dom.Element
+	canvas      js.Value
+	logfDiv     js.Value
+	sliceButton js.Value
 )
 
 func main() {
-	window = webapi.GetWindow()
 	source := loadSource()
 
 	// Wait until JS is initialized
 	f := func() {
-		v := js.Global().Get("getEditor")
-		editor = v.Invoke()
-		doc := window.Document()
-		canvas = doc.GetElementById("canvas")
-		logfDiv = doc.GetElementById("logf")
-		sliceButton = doc.GetElementById("slice-button")
+		editor = js.Global().Call("getEditor")
+		doc := js.Global().Get("document")
+		canvas = doc.Call("getElementById", "canvas")
+		logfDiv = doc.Call("getElementById", "logf")
+		sliceButton = doc.Call("getElementById", "slice-button")
 	}
 	f()
-	for editor.Type() == js.TypeNull || editor.Type() == js.TypeUndefined || canvas == nil || logfDiv == nil || sliceButton == nil {
+	for editor.Type() == js.TypeNull ||
+		editor.Type() == js.TypeUndefined ||
+		canvas.Type() == js.TypeNull ||
+		logfDiv.Type() == js.TypeNull ||
+		logfDiv.Type() == js.TypeUndefined ||
+		sliceButton.Type() == js.TypeNull ||
+		sliceButton.Type() == js.TypeUndefined {
 		time.Sleep(100 * time.Millisecond)
 		f()
 	}
@@ -141,7 +141,7 @@ func initShader(src string) interface{} {
 func loadSource() string {
 	const oldPrefix = "/?s=github.com/"
 	const newPrefix = "https://raw.githubusercontent.com/"
-	url := window.Location().Value_JS.String()
+	url := js.Global().Get("document").Get("location").String()
 	i := strings.Index(url, oldPrefix)
 	if i < 0 {
 		logf("No source requested in URL path.")
@@ -150,7 +150,7 @@ func loadSource() string {
 	location := url[i+len(oldPrefix):]
 	lower := strings.ToLower(location)
 	if !strings.HasSuffix(lower, ".irmf") {
-		window.Alert2("irmf-editor will only load .irmf files")
+		js.Global().Call("alert", "irmf-editor will only load .irmf files")
 		return ""
 	}
 
@@ -159,7 +159,7 @@ func loadSource() string {
 	resp, err := http.Get(location)
 	if err != nil {
 		logf("Unable to download source from: %v", location)
-		window.Alert2("unable to load IRMF shader")
+		js.Global().Call("alert", "unable to load IRMF shader")
 		return ""
 	}
 	buf, err := ioutil.ReadAll(resp.Body)
@@ -173,16 +173,16 @@ func loadSource() string {
 }
 
 func clearLog() {
-	if logfDiv != nil {
-		logfDiv.SetInnerHTML("")
+	if logfDiv.Type() != js.TypeNull {
+		logfDiv.Set("innerHTML", "")
 	}
 }
 
 func logf(fmtStr string, args ...interface{}) {
-	if logfDiv != nil {
-		txt := logfDiv.InnerHTML()
+	if logfDiv.Type() != js.TypeNull && logfDiv.Type() != js.TypeUndefined {
+		txt := logfDiv.Get("innerHTML").String()
 		txt += fmt.Sprintf("<div>"+fmtStr+"</div>", args...)
-		logfDiv.SetInnerHTML(txt)
+		logfDiv.Set("innerHTML", txt)
 	} else {
 		fmt.Printf(fmtStr+"\n", args...)
 	}
