@@ -569,7 +569,8 @@ let sliceScene = null;
 const rtWidth = 512;
 const rtHeight = 512;
 const sliceRenderTarget = new THREE.WebGLRenderTarget(rtWidth, rtHeight);
-function getSliceTexture() { return sliceRenderTarget.texture; }
+let pixelBuffer = null;
+function getPixelBuffer() { return pixelBuffer; }
 function renderSliceToTexture(z) {
   console.log("Rendering slice at z=", z);
   if (sliceScene != null) {
@@ -588,5 +589,9 @@ function renderSliceToTexture(z) {
 
   renderer.setRenderTarget(sliceRenderTarget);
   renderer.render(sliceScene, sliceCamera);
+
+  pixelBuffer = new Uint8Array(4 * rtWidth * rtHeight);
+  renderer.readRenderTargetPixels(sliceRenderTarget, 0, 0, rtWidth, rtHeight, pixelBuffer);
+
   renderer.setRenderTarget(null);
 }
