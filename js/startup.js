@@ -33,19 +33,23 @@ window.MonacoEnvironment = {
   }
 };
 
-let goCallback = null;
+let goCompileCallback = null;
 let decorations = [];
 let compileShader = function () {
-  if (goCallback == null) {
+  if (goCompileCallback == null) {
     console.log('TODO: Compile shader.');
   } else {
     // Clear decorations.
     decorations = editor.deltaDecorations(decorations, []);
-    goCallback();
+    goCompileCallback();
   }
 };
 function installCompileShader(cb) {
-  goCallback = cb;
+  goCompileCallback = cb;
+}
+let goSliceCallback = null;
+function installSliceShader(cb) {
+  goSliceCallback = cb;
 }
 
 let editor = null;
@@ -550,4 +554,30 @@ function render() {
   renderer.render(hudScene, hudActiveCamera);
   // console.log('restoring viewport to full canvas:', fullViewport);
   renderer.setViewport(fullViewport);
+}
+
+let sliceScene = null;
+const rtWidth = 512;
+const rtHeight = 512;
+const sliceRenderTarget = new THREE.WebGLRenderTarget(rtWidth, rtHeight);
+function getSliceTexture() { return sliceRenderTarget.texture; }
+function renderSliceToTexture(z) {
+  console.log("Rendering slice at z=", z);
+  if (sliceScene != null) {
+    sliceScene.dispose();
+  }
+  sliceScene = new THREE.Scene();
+  const width = uniforms.u_ur.value.x - uniforms.u_ll.value.x;
+  const height = uniforms.u_ur.value.y - uniforms.u_ll.value.y;
+  let slicePlane = new THREE.PlaneBufferGeometry(width, height);
+  let sliceMesh = new THREE.Mesh(slicePlane, material);
+  sliceMesh.position.set(0, 0, z);
+  sliceScene.add(sliceMesh);
+  let sliceCamera = new THREE.OrthographicCamera(
+    uniforms.u_ll.value.x, uniforms.u_ur.value.x,
+    uniforms.u_ur.value.y, uniforms.u_ll.value.y, 0.1, 1000);
+
+  renderer.setRenderTarget(sliceRenderTarget);
+  renderer.render(sliceScene, sliceCamera);
+  renderer.setRenderTarget(null);
 }
