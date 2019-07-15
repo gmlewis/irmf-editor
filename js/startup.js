@@ -185,7 +185,7 @@ let activeCamera = null;
 let hudActiveCamera = null;
 const cameraPerspective = new THREE.PerspectiveCamera(fov, aspectRatio, 0.1, 1000);
 let resetCameraD = 5.0;
-const frustumSize = 1.0;
+let frustumSize = 1.0;
 const hudFrustumSize = 1.25;
 const cameraOrthographic = new THREE.OrthographicCamera(
   -aspectRatio * frustumSize, aspectRatio * frustumSize, frustumSize, -frustumSize, 0.1, 1000);
@@ -323,12 +323,12 @@ const viewRotations = [[0, halfPi, 0], [0, -halfPi, 0], [-halfPi, 0, 0], [halfPi
 [quarterPi, 0, quarterPi, 'ZYX'], [-quarterPi, 0, -quarterPi, 'ZYX'], [-quarterPi, 0, quarterPi, 'ZYX'], [quarterPi, 0, -quarterPi, 'ZYX'],
 [-quarterPi, 0, quarterPi, 'ZYX'], [quarterPi, 0, -quarterPi, 'ZYX'], [quarterPi, 0, quarterPi, 'ZYX'], [-quarterPi, 0, -quarterPi, 'ZYX']];
 const viewCallbacks = [
-  function () { toOrtho(); controls.position0.set(5, 0, 0); controls.up0.set(0, 0, 1); controls.reset(); },
-  function () { toOrtho(); controls.position0.set(-5, 0, 0); controls.up0.set(0, 0, 1); controls.reset(); },
-  function () { toOrtho(); controls.position0.set(0, 5, 0); controls.up0.set(0, 0, 1); controls.reset(); },
-  function () { toOrtho(); controls.position0.set(0, -5, 0); controls.up0.set(0, 0, 1); controls.reset(); },
-  function () { toOrtho(); controls.position0.set(0, 0, 5); controls.up0.set(0, 1, 0); controls.reset(); },
-  function () { toOrtho(); controls.position0.set(0, 0, -5); controls.up0.set(0, -1, 0); controls.reset(); },
+  function () { toOrtho(rightView); controls.position0.set(resetCameraD, 0, 0); controls.up0.set(0, 0, 1); controls.reset(); },  // right
+  function () { toOrtho(leftView); controls.position0.set(-resetCameraD, 0, 0); controls.up0.set(0, 0, 1); controls.reset(); },  // left
+  function () { toOrtho(backView); controls.position0.set(0, resetCameraD, 0); controls.up0.set(0, 0, 1); controls.reset(); },  // back
+  function () { toOrtho(frontView); controls.position0.set(0, -resetCameraD, 0); controls.up0.set(0, 0, 1); controls.reset(); },  // front
+  function () { toOrtho(topView); controls.position0.set(0, 0, resetCameraD); controls.up0.set(0, 1, 0); controls.reset(); },  // top
+  function () { toOrtho(bottomView); controls.position0.set(0, 0, -resetCameraD); controls.up0.set(0, -1, 0); controls.reset(); }, // bottom
   function () { toPersp(); controls.position0.set(resetCameraD, -resetCameraD, resetCameraD); controls.up0.set(0, 0, 1); controls.reset(); },
   function () { toPersp(); controls.position0.set(resetCameraD, resetCameraD, resetCameraD); controls.up0.set(0, 0, 1); controls.reset(); },
   function () { toPersp(); controls.position0.set(-resetCameraD, resetCameraD, resetCameraD); controls.up0.set(0, 0, 1); controls.reset(); },
@@ -338,6 +338,74 @@ const viewCallbacks = [
   function () { toPersp(); controls.position0.set(-resetCameraD, resetCameraD, -resetCameraD); controls.up0.set(0, 0, 1); controls.reset(); },
   function () { toPersp(); controls.position0.set(-resetCameraD, -resetCameraD, -resetCameraD); controls.up0.set(0, 0, 1); controls.reset(); }
 ];
+
+function commonViewCalc(left, right, top, bottom) {
+  aspectRatio = canvas.width / canvas.height;
+  let width = (right - left);
+  let height = (top - bottom);
+  const fs = 0.542;  // This value matches nicely with the orthographic view.
+  frustumSize = fs * height;
+  resetCameraD = 0.5 * height;
+  if (frustumSize * aspectRatio < fs * width) {
+    frustumSize = fs * width / aspectRatio;
+    resetCameraD = 0.5 * width;
+  }
+  console.log('aspectRatio=' + aspectRatio.toString() + ', width=' + width.toString() + ', height=' + height.toString() + ', frustumSize=' + frustumSize.toString() + ', resetCameraD=' + resetCameraD.toString());
+  return {
+    left: -aspectRatio * frustumSize,
+    right: aspectRatio * frustumSize,
+    top: frustumSize,
+    bottom: -frustumSize
+  };
+}
+function rightView() {
+  console.log('rightView');
+  let left = uniforms.u_ll.value.y;
+  let right = uniforms.u_ur.value.y;
+  let top = uniforms.u_ur.value.z;
+  let bottom = uniforms.u_ll.value.z;
+  return commonViewCalc(left, right, top, bottom);
+}
+function leftView() {
+  console.log('leftView');
+  let left = uniforms.u_ur.value.y;
+  let right = uniforms.u_ll.value.y;
+  let top = uniforms.u_ur.value.z;
+  let bottom = uniforms.u_ll.value.z;
+  return commonViewCalc(left, right, top, bottom);
+}
+function backView() {
+  console.log('backView');
+  let left = uniforms.u_ur.value.x;
+  let right = uniforms.u_ll.value.x;
+  let top = uniforms.u_ur.value.z;
+  let bottom = uniforms.u_ll.value.z;
+  return commonViewCalc(left, right, top, bottom);
+}
+function frontView() {
+  console.log('frontView');
+  let left = uniforms.u_ll.value.x;
+  let right = uniforms.u_ur.value.x;
+  let top = uniforms.u_ur.value.z;
+  let bottom = uniforms.u_ll.value.z;
+  return commonViewCalc(left, right, top, bottom);
+}
+function topView() {
+  console.log('topView');
+  let left = uniforms.u_ll.value.x;
+  let right = uniforms.u_ur.value.x;
+  let top = uniforms.u_ur.value.y;
+  let bottom = uniforms.u_ll.value.y;
+  return commonViewCalc(left, right, top, bottom);
+}
+function bottomView() {
+  console.log('bottomView');
+  let left = uniforms.u_ll.value.x;
+  let right = uniforms.u_ur.value.x;
+  let top = uniforms.u_ll.value.y;
+  let bottom = uniforms.u_ur.value.y;
+  return commonViewCalc(left, right, top, bottom);
+}
 
 const viewMesh = [];
 const loadManager = new THREE.LoadingManager();
@@ -470,7 +538,14 @@ canvas.addEventListener('touchstart', onCanvasClick, false);
 onCanvasResize();
 animate();
 
-function toOrtho() {
+function toOrtho(getViewport) {
+  const viewport = getViewport();
+  console.log(viewport);
+  cameraOrthographic.left = viewport.left;
+  cameraOrthographic.right = viewport.right;
+  cameraOrthographic.top = viewport.top;
+  cameraOrthographic.bottom = viewport.bottom;
+  cameraOrthographic.updateProjectionMatrix();
   activeCamera = cameraOrthographic;
   controls.object = activeCamera;
   hudActiveCamera = hudCameraOrthographic;
