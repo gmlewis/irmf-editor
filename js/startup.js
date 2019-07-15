@@ -124,8 +124,7 @@ uniform vec3 u_ll;
 uniform vec3 u_ur;
 // uniform vec3 u_resolution;
 // uniform float u_resolution;
-uniform float u_mind;
-uniform float u_maxd;
+uniform float u_d;
 uniform int u_numMaterials;
 uniform vec4 u_color1;
 uniform vec4 u_color2;
@@ -157,7 +156,8 @@ void main() {
     return;
   }
 
-  float d = (v_xyz.z - u_mind)/(u_maxd - u_mind);
+  float d = u_d;
+
   if (u_numMaterials <= 4) {
     vec4 materials;
     mainModel4(materials, v_xyz.xyz);
@@ -209,8 +209,7 @@ const uniforms = {
   // u_resolution: { type: 'v3', value: new THREE.Vector3() },
   u_resolution: { type: 'float', value: 512.0 },
   u_numMaterials: { type: 'int', value: 1 },
-  u_mind: { type: 'float', value: 0.0 },
-  u_maxd: { type: 'float', value: 1.0 },
+  u_d: { type: 'float', value: 0.0 },
   // TODO: Make all the colors configurable through the GUI.
   u_color1: { type: 'v4', value: new THREE.Vector4(1, 0, 0, 1) },
   u_color2: { type: 'v4', value: new THREE.Vector4(0, 1, 0, 1) },
@@ -229,23 +228,36 @@ const uniforms = {
   u_color15: { type: 'v4', value: new THREE.Vector4(1) },
   u_color16: { type: 'v4', value: new THREE.Vector4(1) },
 };
-// const modelGeometry = new THREE.PlaneBufferGeometry(2, 2);
-let material = null;
+function copyUniforms() {
+  let copy = {};
+  let keys = Object.keys(uniforms);
+  for (let i = 0; i < keys.length; i++) {
+    let key = keys[i];
+    copy[key] = { type: uniforms[key].type, value: uniforms[key].value };
+  }
+  return copy;
+}
+
+// let materials = [];
 let modelCentroidNull = null;
-let modelMeshes = [];
+// let modelMeshes = [];
+let compilerSource = '';
 function loadNewModel(source) {
-  console.log("Compiling new model:\n" + source);
-  material = new THREE.ShaderMaterial({ uniforms, vertexShader: vs, fragmentShader: fsHeader + source + fsFooter, side: THREE.DoubleSide, transparent: true });
+  console.log("Compiling new model.");
   // TODO: Check https://github.com/mrdoob/three.js/pull/6818
   // and https://github.com/mrdoob/three.js/pull/6963
   // for getting the GLSL compiler errors and report them in the editor.
-  if (modelMeshes.length > 0) {
-    for (let i = 0; i < modelMeshes.length; i++) {
-      modelMeshes[i].material = material;
-    }
-    material.needsUpdate = true;
-    render();
-  }
+  compilerSource = source;
+  // for (let i = 0; i < modelMeshes.length; i++) {
+  //   let material = new THREE.ShaderMaterial({ uniforms, vertexShader: vs, fragmentShader: fsHeader + source + fsFooter, side: THREE.DoubleSide, transparent: true });
+  //   material.
+  //   modelMeshes[i].material = material;
+  // }
+  // material.needsUpdate = true;
+  let ll = uniforms.u_ll.value;
+  let ur = uniforms.u_ur.value;
+  setMBB(ll.x, ll.y, ll.z, ur.x, ur.y, ur.z);
+  render();
 }
 
 function getLookAt() {
@@ -267,21 +279,27 @@ function setMBB(llx, lly, llz, urx, ury, urz) {
 
   scene.dispose();  // This alone is not enough. Need to create a brand new scene.
   scene = new THREE.Scene();  // Eventually add a light?
+  // modelMeshes = [];
+
   modelCentroidNull = new THREE.Object3D()
   scene.add(modelCentroidNull);
   // modelCentroidNull.add(new THREE.AxesHelper(diagonal));  // for debugging
   // TODO: make this a GUI option:
   scene.add(new THREE.AxesHelper(diagonal));
 
-  const dStep = diagonal / uniforms.u_resolution.value;
-  uniforms.u_mind.value = -0.5 * diagonal + 0.5 * dStep;
-  uniforms.u_maxd.value = 0.5 * diagonal;
-  for (let d = uniforms.u_mind.value; d <= uniforms.u_maxd.value; d += dStep) {
+  const dStep = diagonal / (uniforms.u_resolution.value + 1.0);
+  const minD = -0.5 * diagonal;
+  const maxD = 0.5 * diagonal;
+  // console.log('u_mind=' + minD.toString() + ', u_maxd=' + maxD.toString());
+  for (let d = minD + dStep; d < maxD; d += dStep) {
+    let myUniforms = copyUniforms();
+    myUniforms.u_d.value = (d - minD) / (maxD - dStep - minD);
+    // console.log('d=' + d.toString() + ', u_d=' + myUniforms.u_d.value.toString());
+    let material = new THREE.ShaderMaterial({ uniforms: myUniforms, vertexShader: vs, fragmentShader: fsHeader + compilerSource + fsFooter, side: THREE.DoubleSide, transparent: true });
     let plane = new THREE.PlaneBufferGeometry(diagonal, diagonal);
     let mesh = new THREE.Mesh(plane, material);
     mesh.position.set(0, 0, d);
     modelCentroidNull.add(mesh);
-    modelMeshes.push(mesh);
   }
 }
 

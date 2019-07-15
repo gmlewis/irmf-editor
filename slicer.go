@@ -37,6 +37,9 @@ func sliceShader(this js.Value, args []js.Value) interface{} {
 		return nil
 	}
 	logf("Wrote %v bytes to ZIP file.", buf.Len())
+	img.Release()
+
+	js.Global().Call("saveAs", buf.Bytes(), "slices.zip")
 
 	return nil
 }
@@ -44,11 +47,15 @@ func sliceShader(this js.Value, args []js.Value) interface{} {
 func renderSlice(z float64) *imageBuf {
 	js.Global().Call("renderSliceToTexture", z)
 
-	fn := js.Global().Get("getPixelBuffer")
-	pixelBuffer := fn.Invoke()
+	pixelBuffer := js.Global().Call("getPixelBuffer")
 	logf("pixelBuffer=%v", pixelBuffer.Length())
 
-	b := &imageBuf{}
+	b := &imageBuf{pb: pixelBuffer}
+	// b := &imageBuf{pb: js.TypedArrayOf([]uint8{})}
+	// ta := js.TypedArrayOf([]uint8{})
+	// b := &imageBuf{pb: pixelBuffer.ValueOf(ta), ta: ta}
+	// logf("pb: %v, ta: %v", b.pb.Type(), b.ta.Type())
+	// b := &imageBuf{}
 	// 	if n := js.CopyBytesToGo(b.pb, pixelBuffer); n != 4*512*512 {
 	// 		logf("Got %v bytes from pixelBuffer; want %v", 4*512*512)
 	// 	}
@@ -56,12 +63,22 @@ func renderSlice(z float64) *imageBuf {
 }
 
 type imageBuf struct {
-	pb []byte
+	// pb []byte
+	pb js.Value
+	// ta js.TypedArray
+}
+
+func (i *imageBuf) Release() {
+	// i.ta.Release()
 }
 
 func (i *imageBuf) At(x, y int) color.Color {
 	ind := 4 * ((y * 512) + x)
-	return color.NRGBA{R: i.pb[ind], G: i.pb[ind+1], B: i.pb[ind+2], A: i.pb[ind+3]}
+	r := uint8(i.pb.Index(ind).Int())
+	g := uint8(i.pb.Index(ind + 1).Int())
+	b := uint8(i.pb.Index(ind + 2).Int())
+	a := uint8(i.pb.Index(ind + 3).Int())
+	return color.NRGBA{R: r, G: g, B: b, A: a}
 }
 
 func (i *imageBuf) Bounds() image.Rectangle {

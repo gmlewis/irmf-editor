@@ -47,13 +47,13 @@ func main() {
 		v.Invoke(cb)
 	}
 
-	// Install slice-button callback.
-	cb2 := js.FuncOf(sliceShader)
-	v2 := js.Global().Get("installSliceShader")
-	if v2.Type() == js.TypeFunction {
-		logf("Installing sliceShader callback")
-		v2.Invoke(cb2)
-	}
+	// // Install slice-button callback.
+	// cb2 := js.FuncOf(sliceShader)
+	// v2 := js.Global().Get("installSliceShader")
+	// if v2.Type() == js.TypeFunction {
+	// 	logf("Installing sliceShader callback")
+	// 	v2.Invoke(cb2)
+	// }
 
 	if source != "" {
 		initShader(source)
