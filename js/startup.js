@@ -159,7 +159,7 @@ void main() {
   float d = u_d;
 
   if (u_numMaterials <= 4) {
-    vec4 materials;
+    vec4 materials = vec4(0);
     mainModel4(materials, v_xyz.xyz);
     out_FragColor = d*(u_color1*materials.x + u_color2*materials.y + u_color3*materials.z + u_color4*materials.w);
     // out_FragColor = v_xyz/5.0 + 0.5;  // DEBUG
