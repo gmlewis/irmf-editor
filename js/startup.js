@@ -350,7 +350,7 @@ function commonViewCalc(left, right, top, bottom) {
     frustumSize = fs * width / aspectRatio;
     resetCameraD = 0.5 * width;
   }
-  console.log('aspectRatio=' + aspectRatio.toString() + ', width=' + width.toString() + ', height=' + height.toString() + ', frustumSize=' + frustumSize.toString() + ', resetCameraD=' + resetCameraD.toString());
+  // console.log('aspectRatio=' + aspectRatio.toString() + ', width=' + width.toString() + ', height=' + height.toString() + ', frustumSize=' + frustumSize.toString() + ', resetCameraD=' + resetCameraD.toString());
   return {
     left: -aspectRatio * frustumSize,
     right: aspectRatio * frustumSize,
@@ -359,7 +359,7 @@ function commonViewCalc(left, right, top, bottom) {
   };
 }
 function rightView() {
-  console.log('rightView');
+  // console.log('rightView');
   let left = uniforms.u_ll.value.y;
   let right = uniforms.u_ur.value.y;
   let top = uniforms.u_ur.value.z;
@@ -367,7 +367,7 @@ function rightView() {
   return commonViewCalc(left, right, top, bottom);
 }
 function leftView() {
-  console.log('leftView');
+  // console.log('leftView');
   let left = uniforms.u_ur.value.y;
   let right = uniforms.u_ll.value.y;
   let top = uniforms.u_ur.value.z;
@@ -375,7 +375,7 @@ function leftView() {
   return commonViewCalc(left, right, top, bottom);
 }
 function backView() {
-  console.log('backView');
+  // console.log('backView');
   let left = uniforms.u_ur.value.x;
   let right = uniforms.u_ll.value.x;
   let top = uniforms.u_ur.value.z;
@@ -383,7 +383,7 @@ function backView() {
   return commonViewCalc(left, right, top, bottom);
 }
 function frontView() {
-  console.log('frontView');
+  // console.log('frontView');
   let left = uniforms.u_ll.value.x;
   let right = uniforms.u_ur.value.x;
   let top = uniforms.u_ur.value.z;
@@ -391,7 +391,7 @@ function frontView() {
   return commonViewCalc(left, right, top, bottom);
 }
 function topView() {
-  console.log('topView');
+  // console.log('topView');
   let left = uniforms.u_ll.value.x;
   let right = uniforms.u_ur.value.x;
   let top = uniforms.u_ur.value.y;
@@ -399,7 +399,7 @@ function topView() {
   return commonViewCalc(left, right, top, bottom);
 }
 function bottomView() {
-  console.log('bottomView');
+  // console.log('bottomView');
   let left = uniforms.u_ll.value.x;
   let right = uniforms.u_ur.value.x;
   let top = uniforms.u_ll.value.y;
