@@ -128,9 +128,9 @@ func initShader(src string) interface{} {
 		editor.Call("setValue", newShader)
 	}
 
-	// Set the updated MBB:
+	// Set the updated MBB and number of materials:
 	js.Global().Call("setMBB", jsonBlob.Min[0], jsonBlob.Min[1], jsonBlob.Min[2],
-		jsonBlob.Max[0], jsonBlob.Max[1], jsonBlob.Max[2])
+		jsonBlob.Max[0], jsonBlob.Max[1], jsonBlob.Max[2], len(jsonBlob.Materials))
 
 	// logf("Compiling new model shader:\n%v", shaderSrc)
 	js.Global().Call("loadNewModel", shaderSrc)
