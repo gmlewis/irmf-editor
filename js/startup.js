@@ -159,9 +159,22 @@ void main() {
   float d = u_d;
 
   if (u_numMaterials <= 4) {
-    vec4 materials = vec4(0);
+    vec4 materials;
     mainModel4(materials, v_xyz.xyz);
-    out_FragColor = d*(u_color1*materials.x + u_color2*materials.y + u_color3*materials.z + u_color4*materials.w);
+    switch(u_numMaterials) {
+    case 1:
+      out_FragColor = d*u_color1*materials.x;
+      break;
+    case 2:
+      out_FragColor = d*(u_color1*materials.x + u_color2*materials.y);
+      break;
+    case 3:
+      out_FragColor = d*(u_color1*materials.x + u_color2*materials.y + u_color3*materials.z);
+      break;
+    case 4:
+      out_FragColor = d*(u_color1*materials.x + u_color2*materials.y + u_color3*materials.z + u_color4*materials.w);
+      break;
+    }
     // out_FragColor = v_xyz/5.0 + 0.5;  // DEBUG
     // out_FragColor = vec4(vec3(d), 1.);  // DEBUG
   // } else if (u_numMaterials <= 9) {
@@ -256,7 +269,7 @@ function loadNewModel(source) {
   // material.needsUpdate = true;
   let ll = uniforms.u_ll.value;
   let ur = uniforms.u_ur.value;
-  setMBB(ll.x, ll.y, ll.z, ur.x, ur.y, ur.z);
+  setMBB(ll.x, ll.y, ll.z, ur.x, ur.y, ur.z, uniforms.u_numMaterials.value);
   render();
 }
 
@@ -268,7 +281,8 @@ function getLookAt() {
   const cz = 0.5 * (ll.z + ur.z);
   return [cx, cy, cz];
 }
-function setMBB(llx, lly, llz, urx, ury, urz) {
+function setMBB(llx, lly, llz, urx, ury, urz, numMaterials) {
+  uniforms.u_numMaterials.value = numMaterials;
   uniforms.u_ll.value.set(llx, lly, llz);
   uniforms.u_ur.value.set(urx, ury, urz);
   let maxval = (urx > ury) ? ury : ury;
