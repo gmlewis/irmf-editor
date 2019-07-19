@@ -52,7 +52,14 @@ from your eye, it appears that you are being shown a solid, when in
 actuality, you are being shown a lot of very thin slices of your model
 all stacked together.
 
-TODO: Here is a picture showing what is happening:
+Here is a picture showing what is happening:
+
+![How it works](how-it-works.png)
+
+The camera is "above" the slicing planes (on the +Z axis) looking "down"
+through the stacked planes. As the camera rotates around, the planes
+also rotate to always face the camera, but slice through the model at
+different locations.
 
 ## Why do I see jaggies in my model?
 
@@ -64,7 +71,9 @@ need to keep it performant, so we need to limit the number of slices to
 render. But as a result of slicing the model, high detail models
 (especially those with curves) will show more jaggies than others.
 
-TODO: Here is a picture demonstrating the jaggies:
+Here is a picture demonstrating the jaggies:
+
+![Jaggies](jaggies.png)
 
 The bottom line is that I haven't figured out how to render the object
 yet without jaggies. This too, will be the art that the 3D printer
