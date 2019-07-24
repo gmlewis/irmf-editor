@@ -12,6 +12,7 @@ type irmf struct {
 	Author    string          `json:"author"`
 	Copyright string          `json:"copyright"`
 	Date      string          `json:"date"`
+	Encoding  *string         `json:"encoding,omitempty"`
 	IRMF      string          `json:"irmf"`
 	Materials []string        `json:"materials"`
 	Max       []float64       `json:"max"`
@@ -99,6 +100,10 @@ func (i *irmf) validate(jsonBlobStr, shaderSrc string) (int, error) {
 
 	if len(i.Materials) > 9 && len(i.Materials) <= 16 && strings.Index(shaderSrc, "mainModel16") < 0 {
 		return findKeyLine(jsonBlobStr, "materials"), fmt.Errorf("Found %v materials, but missing 'mainModel16' function", len(i.Materials))
+	}
+
+	if i.Encoding != nil && *i.Encoding != "" && *i.Encoding != "gzip" && *i.Encoding != "gzip+base64" {
+		return findKeyLine(jsonBlobStr, "encoding"), errors.New("Unsupported encoding. Possible values are 'gzip' or 'gzip+base64'")
 	}
 
 	return 0, nil
