@@ -145,45 +145,6 @@ uniform vec4 u_color16;
 in vec4 v_xyz;
 out vec4 out_FragColor;
 `;
-const fsFooter = `
-void main() {
-  if (any(lessThanEqual(abs(v_xyz.xyz),u_ll))) {
-    // out_FragColor = vec4(1);  // DEBUG
-    return;
-  }
-  if (any(greaterThanEqual(abs(v_xyz.xyz),u_ur))) {
-    // out_FragColor = vec4(1);  // DEBUG
-    return;
-  }
-
-  float d = u_d;
-
-  if (u_numMaterials <= 4) {
-    vec4 materials;
-    mainModel4(materials, v_xyz.xyz);
-    switch(u_numMaterials) {
-    case 1:
-      out_FragColor = d*u_color1*materials.x;
-      break;
-    case 2:
-      out_FragColor = d*(u_color1*materials.x + u_color2*materials.y);
-      break;
-    case 3:
-      out_FragColor = d*(u_color1*materials.x + u_color2*materials.y + u_color3*materials.z);
-      break;
-    case 4:
-      out_FragColor = d*(u_color1*materials.x + u_color2*materials.y + u_color3*materials.z + u_color4*materials.w);
-      break;
-    }
-    // out_FragColor = v_xyz/5.0 + 0.5;  // DEBUG
-    // out_FragColor = vec4(vec3(d), 1.);  // DEBUG
-  // } else if (u_numMaterials <= 9) {
-
-  // } else if (u_numMaterials <= 16) {
-
-  }
-}
-`;
 
 let scene = new THREE.Scene();
 const hudScene = new THREE.Scene();
@@ -251,9 +212,7 @@ function copyUniforms() {
   return copy;
 }
 
-// let materials = [];
 let modelCentroidNull = null;
-// let modelMeshes = [];
 let compilerSource = '';
 function loadNewModel(source) {
   console.log("Compiling new model.");
@@ -261,12 +220,6 @@ function loadNewModel(source) {
   // and https://github.com/mrdoob/three.js/pull/6963
   // for getting the GLSL compiler errors and report them in the editor.
   compilerSource = source;
-  // for (let i = 0; i < modelMeshes.length; i++) {
-  //   let material = new THREE.ShaderMaterial({ uniforms, vertexShader: vs, fragmentShader: fsHeader + source + fsFooter, side: THREE.DoubleSide, transparent: true });
-  //   material.
-  //   modelMeshes[i].material = material;
-  // }
-  // material.needsUpdate = true;
   let ll = uniforms.u_ll.value;
   let ur = uniforms.u_ur.value;
   setMBB(ll.x, ll.y, ll.z, ur.x, ur.y, ur.z, uniforms.u_numMaterials.value);
@@ -293,7 +246,6 @@ function setMBB(llx, lly, llz, urx, ury, urz, numMaterials) {
 
   scene.dispose();  // This alone is not enough. Need to create a brand new scene.
   scene = new THREE.Scene();  // Eventually add a light?
-  // modelMeshes = [];
 
   modelCentroidNull = new THREE.Object3D()
   scene.add(modelCentroidNull);
@@ -304,12 +256,10 @@ function setMBB(llx, lly, llz, urx, ury, urz, numMaterials) {
   const dStep = diagonal / (uniforms.u_resolution.value + 1.0);
   const minD = -0.5 * diagonal;
   const maxD = 0.5 * diagonal;
-  // console.log('u_mind=' + minD.toString() + ', u_maxd=' + maxD.toString());
   for (let d = minD + dStep; d < maxD; d += dStep) {
     let myUniforms = copyUniforms();
     myUniforms.u_d.value = (d - minD) / (maxD - dStep - minD);
-    // console.log('d=' + d.toString() + ', u_d=' + myUniforms.u_d.value.toString());
-    let material = new THREE.ShaderMaterial({ uniforms: myUniforms, vertexShader: vs, fragmentShader: fsHeader + compilerSource + fsFooter, side: THREE.DoubleSide, transparent: true });
+    let material = new THREE.ShaderMaterial({ uniforms: myUniforms, vertexShader: vs, fragmentShader: fsHeader + compilerSource, side: THREE.DoubleSide, transparent: true });
     let plane = new THREE.PlaneBufferGeometry(diagonal, diagonal);
     let mesh = new THREE.Mesh(plane, material);
     mesh.position.set(0, 0, d);

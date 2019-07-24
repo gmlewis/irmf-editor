@@ -133,7 +133,7 @@ func initShader(src string) interface{} {
 		jsonBlob.Max[0], jsonBlob.Max[1], jsonBlob.Max[2], len(jsonBlob.Materials))
 
 	// logf("Compiling new model shader:\n%v", shaderSrc)
-	js.Global().Call("loadNewModel", shaderSrc)
+	js.Global().Call("loadNewModel", shaderSrc+fsFooter(len(jsonBlob.Materials)))
 
 	return nil
 }
@@ -205,5 +205,99 @@ float sphere(in vec3 pos, in float radius, in vec3 xyz) {
 void mainModel4( out vec4 materials, in vec3 xyz ) {
   const float radius = 5.0;  // 10mm diameter sphere.
   materials[0] = sphere(vec3(0), radius, xyz);
+}
+`
+
+func fsFooter(numMaterials int) string {
+	switch numMaterials {
+	default:
+		return fmt.Sprintf(fsFooterFmt4, "u_d*u_color1*m.x")
+	case 2:
+		return fmt.Sprintf(fsFooterFmt4, "u_d*(u_color1*m.x + u_color2*m.y)")
+	case 3:
+		return fmt.Sprintf(fsFooterFmt4, "u_d*(u_color1*m.x + u_color2*m.y + u_color3*m.z)")
+	case 4:
+		return fmt.Sprintf(fsFooterFmt4, "u_d*(u_color1*m.x + u_color2*m.y + u_color3*m.z + u_color4*m.w)")
+	case 5:
+		return fmt.Sprintf(fsFooterFmt9, "u_d*(u_color1*m[0][0] + u_color2*m[0][1] + u_color3*m[0][2] + u_color4*m[1][0] + u_color5*m[1][1])")
+	case 6:
+		return fmt.Sprintf(fsFooterFmt9, "u_d*(u_color1*m[0][0] + u_color2*m[0][1] + u_color3*m[0][2] + u_color4*m[1][0] + u_color5*m[1][1] + u_color6*m[1][2])")
+	case 7:
+		return fmt.Sprintf(fsFooterFmt9, "u_d*(u_color1*m[0][0] + u_color2*m[0][1] + u_color3*m[0][2] + u_color4*m[1][0] + u_color5*m[1][1] + u_color6*m[1][2] + u_color7*m[2][0])")
+	case 8:
+		return fmt.Sprintf(fsFooterFmt9, "u_d*(u_color1*m[0][0] + u_color2*m[0][1] + u_color3*m[0][2] + u_color4*m[1][0] + u_color5*m[1][1] + u_color6*m[1][2] + u_color7*m[2][0] + u_color8*m[2][1])")
+	case 9:
+		return fmt.Sprintf(fsFooterFmt9, "u_d*(u_color1*m[0][0] + u_color2*m[0][1] + u_color3*m[0][2] + u_color4*m[1][0] + u_color5*m[1][1] + u_color6*m[1][2] + u_color7*m[2][0] + u_color8*m[2][1] + u_color9*m[2][2])")
+	case 10:
+		return fmt.Sprintf(fsFooterFmt16, "u_d*(u_color1*m[0][0] + u_color2*m[0][1] + u_color3*m[0][2] + u_color4*m[0][3] + u_color5*m[1][0] + u_color6*m[1][1] + u_color7*m[1][2] + u_color8*m[1][3] + u_color9*m[2][0] + u_color10*m[2][1])")
+	case 11:
+		return fmt.Sprintf(fsFooterFmt16, "u_d*(u_color1*m[0][0] + u_color2*m[0][1] + u_color3*m[0][2] + u_color4*m[0][3] + u_color5*m[1][0] + u_color6*m[1][1] + u_color7*m[1][2] + u_color8*m[1][3] + u_color9*m[2][0] + u_color10*m[2][1] + u_color11*m[2][2])")
+	case 12:
+		return fmt.Sprintf(fsFooterFmt16, "u_d*(u_color1*m[0][0] + u_color2*m[0][1] + u_color3*m[0][2] + u_color4*m[0][3] + u_color5*m[1][0] + u_color6*m[1][1] + u_color7*m[1][2] + u_color8*m[1][3] + u_color9*m[2][0] + u_color10*m[2][1] + u_color11*m[2][2] + u_color12*m[2][3])")
+	case 13:
+		return fmt.Sprintf(fsFooterFmt16, "u_d*(u_color1*m[0][0] + u_color2*m[0][1] + u_color3*m[0][2] + u_color4*m[0][3] + u_color5*m[1][0] + u_color6*m[1][1] + u_color7*m[1][2] + u_color8*m[1][3] + u_color9*m[2][0] + u_color10*m[2][1] + u_color11*m[2][2] + u_color12*m[2][3] + u_color13*m[2][0])")
+	case 14:
+		return fmt.Sprintf(fsFooterFmt16, "u_d*(u_color1*m[0][0] + u_color2*m[0][1] + u_color3*m[0][2] + u_color4*m[0][3] + u_color5*m[1][0] + u_color6*m[1][1] + u_color7*m[1][2] + u_color8*m[1][3] + u_color9*m[2][0] + u_color10*m[2][1] + u_color11*m[2][2] + u_color12*m[2][3] + u_color13*m[2][0] + u_color14*m[2][1])")
+	case 15:
+		return fmt.Sprintf(fsFooterFmt16, "u_d*(u_color1*m[0][0] + u_color2*m[0][1] + u_color3*m[0][2] + u_color4*m[0][3] + u_color5*m[1][0] + u_color6*m[1][1] + u_color7*m[1][2] + u_color8*m[1][3] + u_color9*m[2][0] + u_color10*m[2][1] + u_color11*m[2][2] + u_color12*m[2][3] + u_color13*m[2][0] + u_color14*m[2][1] + u_color15*m[2][2])")
+	case 16:
+		return fmt.Sprintf(fsFooterFmt16, "u_d*(u_color1*m[0][0] + u_color2*m[0][1] + u_color3*m[0][2] + u_color4*m[0][3] + u_color5*m[1][0] + u_color6*m[1][1] + u_color7*m[1][2] + u_color8*m[1][3] + u_color9*m[2][0] + u_color10*m[2][1] + u_color11*m[2][2] + u_color12*m[2][3] + u_color13*m[2][0] + u_color14*m[2][1] + u_color15*m[2][2] + u_color16*m[2][3])")
+	}
+}
+
+const fsFooterFmt4 = `
+void main() {
+  if (any(lessThanEqual(abs(v_xyz.xyz),u_ll))) {
+    out_FragColor = vec4(0);
+    // out_FragColor = vec4(1);  // DEBUG
+    return;
+  }
+  if (any(greaterThanEqual(abs(v_xyz.xyz),u_ur))) {
+    out_FragColor = vec4(0);
+    // out_FragColor = vec4(1);  // DEBUG
+    return;
+	}
+  vec4 m;
+  mainModel4(m, v_xyz.xyz);
+  out_FragColor = %v;
+  // out_FragColor = v_xyz/5.0 + 0.5;  // DEBUG
+}
+`
+
+const fsFooterFmt9 = `
+void main() {
+  if (any(lessThanEqual(abs(v_xyz.xyz),u_ll))) {
+		out_FragColor = vec4(0);
+    // out_FragColor = vec4(1);  // DEBUG
+    return;
+  }
+  if (any(greaterThanEqual(abs(v_xyz.xyz),u_ur))) {
+		out_FragColor = vec4(0);
+    // out_FragColor = vec4(1);  // DEBUG
+    return;
+  }
+	mat3 m;
+	mainModel9(m, v_xyz.xyz);
+	out_FragColor = %v;
+	// out_FragColor = v_xyz/5.0 + 0.5;  // DEBUG
+}
+`
+
+const fsFooterFmt16 = `
+void main() {
+  if (any(lessThanEqual(abs(v_xyz.xyz),u_ll))) {
+		out_FragColor = vec4(0);
+    // out_FragColor = vec4(1);  // DEBUG
+    return;
+  }
+  if (any(greaterThanEqual(abs(v_xyz.xyz),u_ur))) {
+		out_FragColor = vec4(0);
+    // out_FragColor = vec4(1);  // DEBUG
+    return;
+  }
+	mat4 m;
+	mainModel16(m, v_xyz.xyz);
+	out_FragColor = %v;
+	// out_FragColor = v_xyz/5.0 + 0.5;  // DEBUG
 }
 `
