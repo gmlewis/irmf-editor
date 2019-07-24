@@ -1,7 +1,11 @@
 package main
 
 import (
+	"bytes"
+	"compress/gzip"
+	"encoding/base64"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"strings"
@@ -55,10 +59,10 @@ func main() {
 	// 	v2.Invoke(cb2)
 	// }
 
-	if source != "" {
+	if len(source) > 0 {
 		initShader(source)
 	} else {
-		initShader(startupShader)
+		initShader([]byte(startupShader))
 	}
 
 	logf("Application irmf-editor is now started")
@@ -72,29 +76,28 @@ func compileShader(this js.Value, args []js.Value) interface{} {
 	clearLog()
 	logf("Go compileShader called!")
 	src := editor.Call("getValue").String()
-	return initShader(src)
+	return initShader([]byte(src))
 }
 
-func initShader(src string) interface{} {
-	lines := strings.Split(src, "\n")
-	if lines[0] != "/*{" {
+func initShader(src []byte) interface{} {
+	if bytes.Index(src, []byte("/*{")) != 0 {
 		logf(`Unable to find leading "/*{"`) // TODO: Turn errors into hover-over text.
 		js.Global().Call("highlightShaderError", 1)
 		return nil
 	}
-	endJSON := strings.Index(src, "\n}*/\n")
+	endJSON := bytes.Index(src, []byte("\n}*/\n"))
 	if endJSON < 0 {
 		logf(`Unable to find trailing "}*/"`)
 		// Try to find the end of the JSON blob.
-		if lineNum := findKeyLine(src, "*/"); lineNum > 2 {
+		if lineNum := findKeyLine(string(src), "*/"); lineNum > 2 {
 			js.Global().Call("highlightShaderError", lineNum)
 			return nil
 		}
-		if lineNum := findKeyLine(src, "}*"); lineNum > 2 {
+		if lineNum := findKeyLine(string(src), "}*"); lineNum > 2 {
 			js.Global().Call("highlightShaderError", lineNum)
 			return nil
 		}
-		if lineNum := findKeyLine(src, "}"); lineNum > 2 {
+		if lineNum := findKeyLine(string(src), "}"); lineNum > 2 {
 			js.Global().Call("highlightShaderError", lineNum)
 			return nil
 		}
@@ -102,7 +105,7 @@ func initShader(src string) interface{} {
 		return nil
 	}
 
-	jsonBlobStr := src[2 : endJSON+2]
+	jsonBlobStr := string(src[2 : endJSON+2])
 	// logf(jsonBlobStr)
 	jsonBlob, err := parseJSON(jsonBlobStr)
 	if err != nil {
@@ -111,7 +114,44 @@ func initShader(src string) interface{} {
 		return nil
 	}
 
-	shaderSrc := src[endJSON+5:]
+	shaderSrcBuf := src[endJSON+5:]
+	var shaderSrc string
+	unzip := func(data []byte) error {
+		zr, err := gzip.NewReader(bytes.NewReader(shaderSrcBuf))
+		if err != nil {
+			logf("gzip Reader: %v", err)
+		}
+		buf := &bytes.Buffer{}
+		if _, err := io.Copy(buf, zr); err != nil {
+			logf("gzip Copy: %v", err)
+		}
+		if err := zr.Close(); err != nil {
+			logf("gzip.Close: %v", err)
+		}
+		shaderSrc = buf.String()
+		return nil
+	}
+
+	if jsonBlob.Encoding != nil && *jsonBlob.Encoding == "gzip+base64" {
+		data, err := base64.StdEncoding.DecodeString(string(shaderSrcBuf))
+		if err != nil {
+			logf("uudecode error: %v", err)
+			return nil
+		}
+		if err := unzip(data); err != nil {
+			logf("unzip: %v", err)
+			return nil
+		}
+		jsonBlob.Encoding = nil
+	} else if jsonBlob.Encoding != nil && *jsonBlob.Encoding == "gzip" {
+		if err := unzip(shaderSrcBuf); err != nil {
+			logf("unzip: %v", err)
+			return nil
+		}
+		jsonBlob.Encoding = nil
+	} else {
+		shaderSrc = string(shaderSrcBuf)
+	}
 
 	if lineNum, err := jsonBlob.validate(jsonBlobStr, shaderSrc); err != nil {
 		logf("Invalid JSON blob: %v", err)
@@ -138,20 +178,20 @@ func initShader(src string) interface{} {
 	return nil
 }
 
-func loadSource() string {
+func loadSource() []byte {
 	const oldPrefix = "/?s=github.com/"
 	const newPrefix = "https://raw.githubusercontent.com/"
 	url := js.Global().Get("document").Get("location").String()
 	i := strings.Index(url, oldPrefix)
 	if i < 0 {
 		logf("No source requested in URL path.")
-		return ""
+		return nil
 	}
 	location := url[i+len(oldPrefix):]
 	lower := strings.ToLower(location)
 	if !strings.HasSuffix(lower, ".irmf") {
 		js.Global().Call("alert", "irmf-editor will only load .irmf files")
-		return ""
+		return nil
 	}
 
 	location = newPrefix + strings.Replace(location, "/blob/", "/", 1)
@@ -160,16 +200,16 @@ func loadSource() string {
 	if err != nil {
 		logf("Unable to download source from: %v", location)
 		js.Global().Call("alert", "unable to load IRMF shader")
-		return ""
+		return nil
 	}
 	buf, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		logf("Unable to ready response body.")
-		return ""
+		return nil
 	}
 	resp.Body.Close()
 	logf("Read %v bytes from GitHub.", len(buf))
-	return string(buf)
+	return buf
 }
 
 func clearLog() {
