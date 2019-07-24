@@ -117,23 +117,23 @@ func initShader(src []byte) interface{} {
 	shaderSrcBuf := src[endJSON+5:]
 	var shaderSrc string
 	unzip := func(data []byte) error {
-		zr, err := gzip.NewReader(bytes.NewReader(shaderSrcBuf))
+		zr, err := gzip.NewReader(bytes.NewReader(data))
 		if err != nil {
-			logf("gzip Reader: %v", err)
+			return err
 		}
 		buf := &bytes.Buffer{}
 		if _, err := io.Copy(buf, zr); err != nil {
-			logf("gzip Copy: %v", err)
+			return err
 		}
 		if err := zr.Close(); err != nil {
-			logf("gzip.Close: %v", err)
+			return err
 		}
 		shaderSrc = buf.String()
 		return nil
 	}
 
 	if jsonBlob.Encoding != nil && *jsonBlob.Encoding == "gzip+base64" {
-		data, err := base64.StdEncoding.DecodeString(string(shaderSrcBuf))
+		data, err := base64.RawStdEncoding.DecodeString(string(shaderSrcBuf))
 		if err != nil {
 			logf("uudecode error: %v", err)
 			return nil
