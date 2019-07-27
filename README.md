@@ -2,7 +2,7 @@
 
 ## Try it out!
 
-*This is work-in-progress - the editor is not functional yet.*
+*This is work-in-progress - the editor is not fully functional yet.*
 
 Note that *nothing* is saved in the editor! You must copy/paste your
 shader source and save it locally or all edits will be lost!
