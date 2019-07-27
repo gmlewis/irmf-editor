@@ -35,13 +35,17 @@ window.MonacoEnvironment = {
 
 let goCompileCallback = null;
 let decorations = [];
+let editor = null;
 let compileShader = function () {
   if (goCompileCallback == null) {
     console.log('TODO: Compile shader.');
   } else {
+    var currentSelection = editor.getSelection();
     // Clear decorations.
     decorations = editor.deltaDecorations(decorations, []);
     goCompileCallback();
+    // Restore cursor:
+    editor.setSelection(currentSelection);
   }
 };
 function installCompileShader(cb) {
@@ -52,11 +56,13 @@ function installSliceShader(cb) {
   goSliceCallback = cb;
 }
 
-let editor = null;
-function highlightShaderError(line) {
+function highlightShaderError(line, column) {
+  if (!column) {
+    column = 1;
+  }
   decorations = editor.deltaDecorations([], [
     {
-      range: new monaco.Range(line, 1, line, 1),
+      range: new monaco.Range(line, column, line, column),
       options: {
         isWholeLine: true,
         className: 'contentErrorClass',
@@ -216,9 +222,6 @@ let modelCentroidNull = null;
 let compilerSource = '';
 function loadNewModel(source) {
   console.log("Compiling new model.");
-  // TODO: Check https://github.com/mrdoob/three.js/pull/6818
-  // and https://github.com/mrdoob/three.js/pull/6963
-  // for getting the GLSL compiler errors and report them in the editor.
   compilerSource = source;
   let ll = uniforms.u_ll.value;
   let ur = uniforms.u_ur.value;
@@ -604,6 +607,32 @@ function animate() {
   requestAnimationFrame(animate);
 }
 
+var errorRE = /ERROR: (\d+):(\d+):/;
+function checkCompilerErrors() {
+  var currentCode = fsHeader + compilerSource;
+  for (var i = 0; i < renderer.info.programs.length; i++) {
+    var program = renderer.info.programs[i];
+    if (program.name !== 'ShaderMaterial' || !program.diagnostics) {
+      continue;
+    }
+    if (program.code.substr(0, currentCode.length) !== currentCode) {
+      continue
+    }
+    if (program.diagnostics.fragmentShader.log) {  // Note - 5 is hard-coded based on current source.
+      var log = program.diagnostics.fragmentShader.log;
+      var logfDiv = document.getElementById('logf');
+      var match = errorRE.exec(log);
+      if (match) {
+        // highlight the error location.
+        var column = match[1];
+        var line = match[2] - 131;  // Note - hard-coded based on current source.
+        highlightShaderError(line, column);
+        log = 'ERROR: ' + (parseInt(column, 10) + 1).toString() + ':' + line.toString() + ':' + log.substr(match[0].length);
+      }
+      logfDiv.innerHTML = '<div>' + log + '</div>';
+    }
+  }
+}
 function render() {
   renderer.clear();
 
@@ -611,6 +640,7 @@ function render() {
     modelCentroidNull.lookAt(activeCamera.position);  // comment out to debug.
   }
   renderer.render(scene, activeCamera);
+  checkCompilerErrors();
 
   activateHudViewport();
   renderer.clearDepth();
