@@ -14,6 +14,10 @@ if (!gl) {
   console.log('Browser does not support WebGL2!');
 }
 
+// Set up GUI:
+const gui = new dat.GUI({ name: 'IRMF Editor', autoPlace: true });
+gui.domElement.id = 'gui';
+
 // Set up Monaco editor...
 
 require.config({ paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.17.1/min/vs' } });
@@ -104,6 +108,7 @@ require(["vs/editor/editor.main"], function () {
   function twoDivResized() {
     canvas.width = twoDiv.offsetWidth;
     canvas.height = twoDiv.offsetHeight - 100; // Keep in sync with 'logf' div height.
+    gui.domElement.style.left = (twoDiv.offsetLeft + 11).toString() + 'px';
     editor.layout();
     onCanvasResize();
   }
