@@ -14,6 +14,35 @@ if (!gl) {
   console.log('Browser does not support WebGL2!');
 }
 
+// Set up GUI:
+const gui = new dat.GUI({ name: 'IRMF Editor', autoPlace: true });
+gui.domElement.id = 'gui';
+
+var resolutionParameters = {
+  res32: false,
+  res64: false,
+  res128: false,
+  res256: false,
+  res512: true,
+  res1024: false,
+  res2048: false
+};
+
+var resolutionFolder = gui.addFolder("Resolution");
+resolutionFolder.add(resolutionParameters, 'res32').name('32').listen().onChange(function () { setChecked('res32'); uniforms.u_resolution.value = 32.0; uniformsChanged(); render(); });
+resolutionFolder.add(resolutionParameters, 'res64').name('64').listen().onChange(function () { setChecked('res64'); uniforms.u_resolution.value = 64.0; uniformsChanged(); render(); });
+resolutionFolder.add(resolutionParameters, 'res128').name('128').listen().onChange(function () { setChecked('res128'); uniforms.u_resolution.value = 128.0; uniformsChanged(); render(); });
+resolutionFolder.add(resolutionParameters, 'res256').name('256').listen().onChange(function () { setChecked('res256'); uniforms.u_resolution.value = 256.0; uniformsChanged(); render(); });
+resolutionFolder.add(resolutionParameters, 'res512').name('512').listen().onChange(function () { setChecked('res512'); uniforms.u_resolution.value = 512.0; uniformsChanged(); render(); });
+resolutionFolder.add(resolutionParameters, 'res1024').name('1024').listen().onChange(function () { setChecked('res1024'); uniforms.u_resolution.value = 1024.0; uniformsChanged(); render(); });
+resolutionFolder.add(resolutionParameters, 'res2048').name('2048').listen().onChange(function () { setChecked('res2048'); uniforms.u_resolution.value = 2048.0; uniformsChanged(); render(); });
+function setChecked(prop) {
+  for (let param in resolutionParameters) {
+    resolutionParameters[param] = false;
+  }
+  resolutionParameters[prop] = true;
+}
+
 // Set up Monaco editor...
 
 require.config({ paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.17.1/min/vs' } });
@@ -104,6 +133,7 @@ require(["vs/editor/editor.main"], function () {
   function twoDivResized() {
     canvas.width = twoDiv.offsetWidth;
     canvas.height = twoDiv.offsetHeight - 100; // Keep in sync with 'logf' div height.
+    gui.domElement.style.left = (twoDiv.offsetLeft + 11).toString() + 'px';
     editor.layout();
     onCanvasResize();
   }
@@ -186,7 +216,6 @@ const uniforms = {
   u_ll: { type: 'v3', value: new THREE.Vector3() }, // MBB min
   u_ur: { type: 'v3', value: new THREE.Vector3() },  // MBB max
   u_matrix: { type: 'm4', value: new THREE.Matrix4() },
-  // u_resolution: { type: 'v3', value: new THREE.Vector3() },
   u_resolution: { type: 'float', value: 512.0 },
   u_numMaterials: { type: 'int', value: 1 },
   u_d: { type: 'float', value: 0.0 },
@@ -241,6 +270,12 @@ function setMBB(llx, lly, llz, urx, ury, urz, numMaterials) {
   uniforms.u_numMaterials.value = numMaterials;
   uniforms.u_ll.value.set(llx, lly, llz);
   uniforms.u_ur.value.set(urx, ury, urz);
+  uniformsChanged();
+}
+function uniformsChanged() {
+  let urx = uniforms.u_ur.value[0];
+  let ury = uniforms.u_ur.value[1];
+  let urz = uniforms.u_ur.value[2];
   let maxval = (urx > ury) ? ury : ury;
   maxval = (maxval > urz) ? maxval : urz;
   resetCameraD = maxval;
