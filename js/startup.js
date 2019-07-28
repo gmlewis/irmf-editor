@@ -17,7 +17,6 @@ if (!gl) {
 // Set up GUI:
 const gui = new dat.GUI({ name: 'IRMF Editor', autoPlace: true });
 gui.domElement.id = 'gui';
-gui.domElement.style.display = 'block';  // Why is GUI disappearing when typing in editor?!?
 
 var resolutionParameters = {
   res32: false,
@@ -178,6 +177,7 @@ require(["vs/editor/editor.main"], function () {
     canvas.width = twoDiv.offsetWidth;
     canvas.height = twoDiv.offsetHeight - 100; // Keep in sync with 'logf' div height.
     gui.domElement.style.left = (twoDiv.offsetLeft + 11).toString() + 'px';
+    gui.domElement.style.display = 'block';  // Why is GUI disappearing when typing in editor?!?
     editor.layout();
     onCanvasResize();
   }
