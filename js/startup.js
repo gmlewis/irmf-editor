@@ -17,6 +17,7 @@ if (!gl) {
 // Set up GUI:
 const gui = new dat.GUI({ name: 'IRMF Editor', autoPlace: true });
 gui.domElement.id = 'gui';
+gui.domElement.style.display = 'block';  // Why is GUI disappearing when typing in editor?!?
 
 var resolutionParameters = {
   res32: false,
@@ -42,6 +43,49 @@ function setChecked(prop) {
   }
   resolutionParameters[prop] = true;
 }
+
+var colorFolder = gui.addFolder('Material colors (1)');
+var colorPalette = {
+  color1: [255, 0, 0, 1.0],
+  color2: [0, 255, 0, 1.0],
+  color3: [0, 0, 255, 1.0],
+  color4: [255, 255, 0, 1.0],
+  color5: [0, 255, 255, 1.0],
+  color6: [255, 0, 255, 1.0],
+  color7: [128, 0, 0, 1.0],
+  color8: [0, 128, 0, 1.0],
+  color9: [0, 0, 128, 1.0],
+  color10: [128, 128, 0, 1.0],
+  color11: [0, 128, 128, 1.0],
+  color12: [128, 0, 128, 1.0],
+  color13: [64, 128, 64, 1.0],
+  color14: [128, 64, 128, 1.0],
+  color15: [64, 64, 128, 1.0],
+  color16: [64, 128, 128, 1.0],
+};
+
+var colorControllers = [
+];
+
+function refreshMaterialColorControllers(names) {
+  for (var i = 0; i < colorControllers.length; i++) {
+    colorFolder.remove(colorControllers[i]);
+  }
+  colorControllers = [];
+  for (var i = 1; i <= names.length; i++) {
+    let name = names[i - 1];
+    let colorName = 'color' + i.toString();
+    let uniformName = 'u_color' + i.toString();
+    let ctrl = colorFolder.addColor(colorPalette, colorName).name(name).listen().onChange(function () {
+      let color = colorPalette[colorName];
+      uniforms[uniformName].value.set(color[0] / 255.0, color[1] / 255.0, color[2] / 255.0, color[3]);
+      uniformsChanged();
+      render();
+    });
+    colorControllers.push(ctrl);
+  }
+}
+refreshMaterialColorControllers(['PLA']);
 
 // Set up Monaco editor...
 
