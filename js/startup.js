@@ -17,6 +17,7 @@ if (!gl) {
 // Set up GUI:
 const gui = new dat.GUI({ name: 'IRMF Editor', autoPlace: true });
 gui.domElement.id = 'gui';
+gui.domElement.style.display = 'block';  // Why is GUI disappearing when typing in editor?!?
 
 var resolutionParameters = {
   res32: false,
@@ -64,8 +65,27 @@ var colorPalette = {
 };
 
 var colorControllers = [
-  colorFolder.addColor(colorPalette, 'color1'),
 ];
+
+function refreshMaterialColorControllers(names) {
+  for (var i = 0; i < colorControllers.length; i++) {
+    colorFolder.remove(colorControllers[i]);
+  }
+  colorControllers = [];
+  for (var i = 1; i <= names.length; i++) {
+    let name = names[i - 1];
+    let colorName = 'color' + i.toString();
+    let uniformName = 'u_color' + i.toString();
+    let ctrl = colorFolder.addColor(colorPalette, colorName).name(name).listen().onChange(function () {
+      let color = colorPalette[colorName];
+      uniforms[uniformName].value.set(color[0] / 255.0, color[1] / 255.0, color[2] / 255.0, color[3]);
+      uniformsChanged();
+      render();
+    });
+    colorControllers.push(ctrl);
+  }
+}
+refreshMaterialColorControllers(['PLA']);
 
 // Set up Monaco editor...
 

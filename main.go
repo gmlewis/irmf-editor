@@ -159,7 +159,6 @@ func initShader(src []byte) interface{} {
 		return nil
 	}
 
-	// TODO: Figure out how to preserve the cursor location on rewrite.
 	// Rewrite the editor buffer:
 	newShader, err := jsonBlob.format(shaderSrc)
 	if err != nil {
@@ -167,6 +166,14 @@ func initShader(src []byte) interface{} {
 	} else {
 		editor.Call("setValue", newShader)
 	}
+
+	// Set the GUI to the correct number of materials and their color editors.
+	js.Global().Get("colorFolder").Set("name", fmt.Sprintf("Material colors (%v)", len(jsonBlob.Materials)))
+	jsArray := js.ValueOf([]interface{}{})
+	for i, name := range jsonBlob.Materials {
+		jsArray.SetIndex(i, name)
+	}
+	js.Global().Call("refreshMaterialColorControllers", jsArray)
 
 	// Set the updated MBB and number of materials:
 	js.Global().Call("setMBB", jsonBlob.Min[0], jsonBlob.Min[1], jsonBlob.Min[2],
