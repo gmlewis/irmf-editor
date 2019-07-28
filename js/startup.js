@@ -43,6 +43,30 @@ function setChecked(prop) {
   resolutionParameters[prop] = true;
 }
 
+var colorFolder = gui.addFolder('Material colors (1)');
+var colorPalette = {
+  color1: [255, 0, 0, 1.0],
+  color2: [0, 255, 0, 1.0],
+  color3: [0, 0, 255, 1.0],
+  color4: [255, 255, 0, 1.0],
+  color5: [0, 255, 255, 1.0],
+  color6: [255, 0, 255, 1.0],
+  color7: [128, 0, 0, 1.0],
+  color8: [0, 128, 0, 1.0],
+  color9: [0, 0, 128, 1.0],
+  color10: [128, 128, 0, 1.0],
+  color11: [0, 128, 128, 1.0],
+  color12: [128, 0, 128, 1.0],
+  color13: [64, 128, 64, 1.0],
+  color14: [128, 64, 128, 1.0],
+  color15: [64, 64, 128, 1.0],
+  color16: [64, 128, 128, 1.0],
+};
+
+var colorControllers = [
+  colorFolder.addColor(colorPalette, 'color1'),
+];
+
 // Set up Monaco editor...
 
 require.config({ paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.17.1/min/vs' } });
