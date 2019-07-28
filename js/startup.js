@@ -28,14 +28,19 @@ var resolutionParameters = {
   res2048: false
 };
 
+function setResolution(res) {
+  setChecked('res' + res.toString());
+  uniforms.u_resolution.value = res;
+}
+
 var resolutionFolder = gui.addFolder("Resolution");
-resolutionFolder.add(resolutionParameters, 'res32').name('32').listen().onChange(function () { setChecked('res32'); uniforms.u_resolution.value = 32.0; uniformsChanged(); render(); });
-resolutionFolder.add(resolutionParameters, 'res64').name('64').listen().onChange(function () { setChecked('res64'); uniforms.u_resolution.value = 64.0; uniformsChanged(); render(); });
-resolutionFolder.add(resolutionParameters, 'res128').name('128').listen().onChange(function () { setChecked('res128'); uniforms.u_resolution.value = 128.0; uniformsChanged(); render(); });
-resolutionFolder.add(resolutionParameters, 'res256').name('256').listen().onChange(function () { setChecked('res256'); uniforms.u_resolution.value = 256.0; uniformsChanged(); render(); });
-resolutionFolder.add(resolutionParameters, 'res512').name('512').listen().onChange(function () { setChecked('res512'); uniforms.u_resolution.value = 512.0; uniformsChanged(); render(); });
-resolutionFolder.add(resolutionParameters, 'res1024').name('1024').listen().onChange(function () { setChecked('res1024'); uniforms.u_resolution.value = 1024.0; uniformsChanged(); render(); });
-resolutionFolder.add(resolutionParameters, 'res2048').name('2048').listen().onChange(function () { setChecked('res2048'); uniforms.u_resolution.value = 2048.0; uniformsChanged(); render(); });
+resolutionFolder.add(resolutionParameters, 'res32').name('32').listen().onChange(function () { setResolution(32); goJSONOptionsCallback(); uniformsChanged(); render(); });
+resolutionFolder.add(resolutionParameters, 'res64').name('64').listen().onChange(function () { setResolution(64); goJSONOptionsCallback(); uniformsChanged(); render(); });
+resolutionFolder.add(resolutionParameters, 'res128').name('128').listen().onChange(function () { setResolution(128); goJSONOptionsCallback(); uniformsChanged(); render(); });
+resolutionFolder.add(resolutionParameters, 'res256').name('256').listen().onChange(function () { setResolution(256); goJSONOptionsCallback(); uniformsChanged(); render(); });
+resolutionFolder.add(resolutionParameters, 'res512').name('512').listen().onChange(function () { setResolution(512); goJSONOptionsCallback(); uniformsChanged(); render(); });
+resolutionFolder.add(resolutionParameters, 'res1024').name('1024').listen().onChange(function () { setResolution(1024); goJSONOptionsCallback(); uniformsChanged(); render(); });
+resolutionFolder.add(resolutionParameters, 'res2048').name('2048').listen().onChange(function () { setResolution(2048); goJSONOptionsCallback(); uniformsChanged(); render(); });
 function setChecked(prop) {
   for (let param in resolutionParameters) {
     resolutionParameters[param] = false;
@@ -78,6 +83,7 @@ function refreshMaterialColorControllers(names) {
     let ctrl = colorFolder.addColor(colorPalette, colorName).name(name).listen().onChange(function () {
       let color = colorPalette[colorName];
       uniforms[uniformName].value.set(color[0] / 255.0, color[1] / 255.0, color[2] / 255.0, color[3]);
+      goJSONOptionsCallback();
       uniformsChanged();
       render();
     });
@@ -123,9 +129,13 @@ let compileShader = function () {
 function installCompileShader(cb) {
   goCompileCallback = cb;
 }
-let goSliceCallback = null;
-function installSliceShader(cb) {
-  goSliceCallback = cb;
+// let goSliceCallback = null;
+// function installSliceShader(cb) {
+//   goSliceCallback = cb;
+// }
+let goJSONOptionsCallback = null;
+function installUpdateJSONOptionsCallback(cb) {
+  goJSONOptionsCallback = cb;
 }
 
 function highlightShaderError(line, column) {
@@ -202,8 +212,6 @@ precision highp float;
 precision highp int;
 uniform vec3 u_ll;
 uniform vec3 u_ur;
-// uniform vec3 u_resolution;
-// uniform float u_resolution;
 uniform float u_d;
 uniform int u_numMaterials;
 uniform vec4 u_color1;
@@ -251,11 +259,6 @@ let renderer = new THREE.WebGLRenderer({ canvas: canvas, context: gl });
 renderer.setSize(canvas.width, canvas.height);
 renderer.autoClear = false;
 
-// // Probably not needed at all:
-// const light = new THREE.DirectionalLight(0xFFFFFF, 1);
-// light.position.set(-1, 2, 4);
-// scene.add(light);
-
 const uniforms = {
   u_ll: { type: 'v3', value: new THREE.Vector3() }, // MBB min
   u_ur: { type: 'v3', value: new THREE.Vector3() },  // MBB max
@@ -281,6 +284,7 @@ const uniforms = {
   u_color15: { type: 'v4', value: new THREE.Vector4(1) },
   u_color16: { type: 'v4', value: new THREE.Vector4(1) },
 };
+function getUniforms() { return uniforms; }
 function copyUniforms() {
   let copy = {};
   let keys = Object.keys(uniforms);
@@ -704,7 +708,7 @@ function checkCompilerErrors() {
       if (match) {
         // highlight the error location.
         var column = match[1];
-        var line = match[2] - 131;  // Note - hard-coded based on current source.
+        var line = match[2] - 129;  // Note - hard-coded based on current source.
         highlightShaderError(line, column);
         log = 'ERROR: ' + (parseInt(column, 10) + 1).toString() + ':' + line.toString() + ':' + log.substr(match[0].length);
       }
