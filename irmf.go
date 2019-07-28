@@ -9,20 +9,42 @@ import (
 )
 
 type irmf struct {
-	Author    string          `json:"author"`
-	Copyright string          `json:"copyright"`
-	Date      string          `json:"date"`
-	Encoding  *string         `json:"encoding,omitempty"`
-	IRMF      string          `json:"irmf"`
-	Materials []string        `json:"materials"`
-	Max       []float64       `json:"max"`
-	Min       []float64       `json:"min"`
-	Notes     string          `json:"notes"`
-	Options   json.RawMessage `json:"options"`
-	Title     string          `json:"title"`
-	Units     string          `json:"units"`
-	Version   string          `json:"version"`
+	Author    string        `json:"author"`
+	Copyright string        `json:"copyright"`
+	Date      string        `json:"date"`
+	Encoding  *string       `json:"encoding,omitempty"`
+	IRMF      string        `json:"irmf"`
+	Materials []string      `json:"materials"`
+	Max       []float64     `json:"max"`
+	Min       []float64     `json:"min"`
+	Notes     string        `json:"notes"`
+	Options   editorOptions `json:"options"`
+	Title     string        `json:"title"`
+	Units     string        `json:"units"`
+	Version   string        `json:"version"`
 }
+
+type editorOptions struct {
+	Resolution *int  `json:"resolution,omitempty"`
+	Color1     *rgba `json:"color1,omitempty"`
+	Color2     *rgba `json:"color2,omitempty"`
+	Color3     *rgba `json:"color3,omitempty"`
+	Color4     *rgba `json:"color4,omitempty"`
+	Color5     *rgba `json:"color5,omitempty"`
+	Color6     *rgba `json:"color6,omitempty"`
+	Color7     *rgba `json:"color7,omitempty"`
+	Color8     *rgba `json:"color8,omitempty"`
+	Color9     *rgba `json:"color9,omitempty"`
+	Color10    *rgba `json:"color10,omitempty"`
+	Color11    *rgba `json:"color11,omitempty"`
+	Color12    *rgba `json:"color12,omitempty"`
+	Color13    *rgba `json:"color13,omitempty"`
+	Color14    *rgba `json:"color14,omitempty"`
+	Color15    *rgba `json:"color15,omitempty"`
+	Color16    *rgba `json:"color16,omitempty"`
+}
+
+type rgba [4]float64
 
 var (
 	jsonKeys = []string{

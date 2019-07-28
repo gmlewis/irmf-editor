@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"math"
 	"net/http"
 	"strings"
 	"syscall/js"
@@ -14,10 +15,11 @@ import (
 )
 
 var (
-	editor      js.Value
-	canvas      js.Value
-	logfDiv     js.Value
-	sliceButton js.Value
+	editor        js.Value
+	canvas        js.Value
+	logfDiv       js.Value
+	sliceButton   js.Value
+	setResolution js.Value
 )
 
 func main() {
@@ -30,6 +32,7 @@ func main() {
 		canvas = doc.Call("getElementById", "canvas")
 		logfDiv = doc.Call("getElementById", "logf")
 		sliceButton = doc.Call("getElementById", "slice-button")
+		setResolution = js.Global().Get("setResolution")
 	}
 	f()
 	for editor.Type() == js.TypeNull ||
@@ -43,11 +46,17 @@ func main() {
 		f()
 	}
 
-	// Install compileShader callback.
+	// Install callbacks.
 	cb := js.FuncOf(compileShader)
 	v := js.Global().Get("installCompileShader")
 	if v.Type() == js.TypeFunction {
 		logf("Installing compileShader callback")
+		v.Invoke(cb)
+	}
+	cb = js.FuncOf(updateJSONOptionsCallback)
+	v = js.Global().Get("installUpdateJSONOptionsCallback")
+	if v.Type() == js.TypeFunction {
+		logf("Installing updateJSONOptions callback")
 		v.Invoke(cb)
 	}
 
@@ -80,10 +89,81 @@ func compileShader(this js.Value, args []js.Value) interface{} {
 }
 
 func initShader(src []byte) interface{} {
+	jsonBlob, shaderSrc := parseEditor(src)
+	if jsonBlob == nil {
+		return nil
+	}
+
+	// Rewrite the editor buffer:
+	newShader, err := jsonBlob.format(shaderSrc)
+	if err != nil {
+		logf("Error: %v", err)
+	} else {
+		editor.Call("setValue", newShader)
+	}
+
+	if jsonBlob.Options.Resolution != nil {
+		switch res := *jsonBlob.Options.Resolution; res {
+		case 32, 64, 128, 256, 512, 1024, 2048:
+			if setResolution.Type() == js.TypeFunction {
+				setResolution.Invoke(res)
+			}
+		}
+	}
+	uniforms := js.Global().Call("getUniforms")
+	if uniforms.Type() != js.TypeNull && uniforms.Type() != js.TypeUndefined {
+		setColor := func(n int, v *rgba) {
+			if v == nil {
+				return
+			}
+			color := js.Global().Get("colorPalette").Get(fmt.Sprintf("color%v", n))
+			color.SetIndex(0, v[0])
+			color.SetIndex(1, v[1])
+			color.SetIndex(2, v[2])
+			color.SetIndex(3, v[3])
+			uniforms.Get(fmt.Sprintf("u_color%v", n)).Get("value").Call("set", v[0]/255.0, v[1]/255.0, v[2]/255.0, v[3])
+		}
+		setColor(1, jsonBlob.Options.Color1)
+		setColor(2, jsonBlob.Options.Color2)
+		setColor(3, jsonBlob.Options.Color3)
+		setColor(4, jsonBlob.Options.Color4)
+		setColor(5, jsonBlob.Options.Color5)
+		setColor(6, jsonBlob.Options.Color6)
+		setColor(7, jsonBlob.Options.Color7)
+		setColor(8, jsonBlob.Options.Color8)
+		setColor(9, jsonBlob.Options.Color9)
+		setColor(10, jsonBlob.Options.Color10)
+		setColor(11, jsonBlob.Options.Color11)
+		setColor(12, jsonBlob.Options.Color12)
+		setColor(13, jsonBlob.Options.Color13)
+		setColor(14, jsonBlob.Options.Color14)
+		setColor(15, jsonBlob.Options.Color15)
+		setColor(16, jsonBlob.Options.Color16)
+	}
+
+	// Set the GUI to the correct number of materials and their color editors.
+	js.Global().Get("colorFolder").Set("name", fmt.Sprintf("Material colors (%v)", len(jsonBlob.Materials)))
+	jsArray := js.ValueOf([]interface{}{})
+	for i, name := range jsonBlob.Materials {
+		jsArray.SetIndex(i, name)
+	}
+	js.Global().Call("refreshMaterialColorControllers", jsArray)
+
+	// Set the updated MBB and number of materials:
+	js.Global().Call("setMBB", jsonBlob.Min[0], jsonBlob.Min[1], jsonBlob.Min[2],
+		jsonBlob.Max[0], jsonBlob.Max[1], jsonBlob.Max[2], len(jsonBlob.Materials))
+
+	// logf("Compiling new model shader:\n%v", shaderSrc)
+	js.Global().Call("loadNewModel", shaderSrc+fsFooter(len(jsonBlob.Materials)))
+
+	return nil
+}
+
+func parseEditor(src []byte) (*irmf, string) {
 	if bytes.Index(src, []byte("/*{")) != 0 {
 		logf(`Unable to find leading "/*{"`) // TODO: Turn errors into hover-over text.
 		js.Global().Call("highlightShaderError", 1)
-		return nil
+		return nil, ""
 	}
 	endJSON := bytes.Index(src, []byte("\n}*/\n"))
 	if endJSON < 0 {
@@ -91,18 +171,18 @@ func initShader(src []byte) interface{} {
 		// Try to find the end of the JSON blob.
 		if lineNum := findKeyLine(string(src), "*/"); lineNum > 2 {
 			js.Global().Call("highlightShaderError", lineNum)
-			return nil
+			return nil, ""
 		}
 		if lineNum := findKeyLine(string(src), "}*"); lineNum > 2 {
 			js.Global().Call("highlightShaderError", lineNum)
-			return nil
+			return nil, ""
 		}
 		if lineNum := findKeyLine(string(src), "}"); lineNum > 2 {
 			js.Global().Call("highlightShaderError", lineNum)
-			return nil
+			return nil, ""
 		}
 		js.Global().Call("highlightShaderError", 1)
-		return nil
+		return nil, ""
 	}
 
 	jsonBlobStr := string(src[2 : endJSON+2])
@@ -111,7 +191,7 @@ func initShader(src []byte) interface{} {
 	if err != nil {
 		logf("Unable to parse JSON blob: %v", err)
 		js.Global().Call("highlightShaderError", 2)
-		return nil
+		return nil, ""
 	}
 
 	shaderSrcBuf := src[endJSON+5:]
@@ -136,17 +216,17 @@ func initShader(src []byte) interface{} {
 		data, err := base64.RawStdEncoding.DecodeString(string(shaderSrcBuf))
 		if err != nil {
 			logf("uudecode error: %v", err)
-			return nil
+			return nil, ""
 		}
 		if err := unzip(data); err != nil {
 			logf("unzip: %v", err)
-			return nil
+			return nil, ""
 		}
 		jsonBlob.Encoding = nil
 	} else if jsonBlob.Encoding != nil && *jsonBlob.Encoding == "gzip" {
 		if err := unzip(shaderSrcBuf); err != nil {
 			logf("unzip: %v", err)
-			return nil
+			return nil, ""
 		}
 		jsonBlob.Encoding = nil
 	} else {
@@ -156,8 +236,16 @@ func initShader(src []byte) interface{} {
 	if lineNum, err := jsonBlob.validate(jsonBlobStr, shaderSrc); err != nil {
 		logf("Invalid JSON blob: %v", err)
 		js.Global().Call("highlightShaderError", lineNum)
-		return nil
+		return nil, ""
 	}
+
+	return jsonBlob, shaderSrc
+}
+
+func updateJSONOptionsCallback(this js.Value, args []js.Value) interface{} {
+	src := editor.Call("getValue").String()
+	jsonBlob, shaderSrc := parseEditor([]byte(src))
+	updateJSONOptions(jsonBlob)
 
 	// Rewrite the editor buffer:
 	newShader, err := jsonBlob.format(shaderSrc)
@@ -166,23 +254,59 @@ func initShader(src []byte) interface{} {
 	} else {
 		editor.Call("setValue", newShader)
 	}
-
-	// Set the GUI to the correct number of materials and their color editors.
-	js.Global().Get("colorFolder").Set("name", fmt.Sprintf("Material colors (%v)", len(jsonBlob.Materials)))
-	jsArray := js.ValueOf([]interface{}{})
-	for i, name := range jsonBlob.Materials {
-		jsArray.SetIndex(i, name)
-	}
-	js.Global().Call("refreshMaterialColorControllers", jsArray)
-
-	// Set the updated MBB and number of materials:
-	js.Global().Call("setMBB", jsonBlob.Min[0], jsonBlob.Min[1], jsonBlob.Min[2],
-		jsonBlob.Max[0], jsonBlob.Max[1], jsonBlob.Max[2], len(jsonBlob.Materials))
-
-	// logf("Compiling new model shader:\n%v", shaderSrc)
-	js.Global().Call("loadNewModel", shaderSrc+fsFooter(len(jsonBlob.Materials)))
-
 	return nil
+}
+
+func updateJSONOptions(jsonBlob *irmf) {
+	uniforms := js.Global().Call("getUniforms")
+	if uniforms.Type() != js.TypeNull && uniforms.Type() != js.TypeUndefined {
+		resolution := uniforms.Get("u_resolution").Get("value").Int()
+		jsonBlob.Options.Resolution = &resolution
+
+		for i := range jsonBlob.Materials {
+			color := uniforms.Get(fmt.Sprintf("u_color%v", i+1)).Get("value")
+			v := &rgba{
+				math.Floor(0.5 + 255.0*color.Get("x").Float()),
+				math.Floor(0.5 + 255.0*color.Get("y").Float()),
+				math.Floor(0.5 + 255.0*color.Get("z").Float()),
+				color.Get("w").Float(),
+			}
+			switch i + 1 {
+			case 1:
+				jsonBlob.Options.Color1 = v
+			case 2:
+				jsonBlob.Options.Color2 = v
+			case 3:
+				jsonBlob.Options.Color3 = v
+			case 4:
+				jsonBlob.Options.Color4 = v
+			case 5:
+				jsonBlob.Options.Color5 = v
+			case 6:
+				jsonBlob.Options.Color6 = v
+			case 7:
+				jsonBlob.Options.Color7 = v
+			case 8:
+				jsonBlob.Options.Color8 = v
+			case 9:
+				jsonBlob.Options.Color9 = v
+			case 10:
+				jsonBlob.Options.Color10 = v
+			case 11:
+				jsonBlob.Options.Color11 = v
+			case 12:
+				jsonBlob.Options.Color12 = v
+			case 13:
+				jsonBlob.Options.Color13 = v
+			case 14:
+				jsonBlob.Options.Color14 = v
+			case 15:
+				jsonBlob.Options.Color15 = v
+			case 16:
+				jsonBlob.Options.Color16 = v
+			}
+		}
+	}
 }
 
 func loadSource() []byte {
