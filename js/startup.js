@@ -708,7 +708,7 @@ function checkCompilerErrors() {
       if (match) {
         // highlight the error location.
         var column = match[1];
-        var line = match[2] - 129;  // Note - hard-coded based on current source.
+        var line = match[2] - 125;  // Note - hard-coded based on current source.
         highlightShaderError(line, column);
         log = 'ERROR: ' + (parseInt(column, 10) + 1).toString() + ':' + line.toString() + ':' + log.substr(match[0].length);
       }
