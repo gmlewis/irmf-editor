@@ -321,9 +321,9 @@ function setMBB(llx, lly, llz, urx, ury, urz, numMaterials) {
   uniformsChanged();
 }
 function uniformsChanged() {
-  let urx = uniforms.u_ur.value[0];
-  let ury = uniforms.u_ur.value[1];
-  let urz = uniforms.u_ur.value[2];
+  let urx = uniforms.u_ur.value.x;
+  let ury = uniforms.u_ur.value.y;
+  let urz = uniforms.u_ur.value.z;
   let maxval = (urx > ury) ? ury : ury;
   maxval = (maxval > urz) ? maxval : urz;
   resetCameraD = maxval;
