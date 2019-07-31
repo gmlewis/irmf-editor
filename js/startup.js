@@ -49,6 +49,7 @@ function setChecked(prop) {
 }
 
 let colorFolder = gui.addFolder('Material colors (1)');
+function getColorFolder() { return colorFolder; }
 let colorPalette = {
   color1: [255, 0, 0, 1.0],
   color2: [0, 255, 0, 1.0],
