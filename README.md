@@ -1,5 +1,7 @@
 # [IRMF Shader](https://github.com/gmlewis/irmf) Editor
 
+![example with value ranges](value-ranges.png)
+
 ## Try it out!
 
 *This is work-in-progress - the editor is not fully functional yet.*
