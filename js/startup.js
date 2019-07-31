@@ -18,7 +18,7 @@ if (!gl) {
 const gui = new dat.GUI({ name: 'IRMF Editor', autoPlace: true });
 gui.domElement.id = 'gui';
 
-var resolutionParameters = {
+let resolutionParameters = {
   res32: false,
   res64: false,
   res128: false,
@@ -33,7 +33,7 @@ function setResolution(res) {
   uniforms.u_resolution.value = res;
 }
 
-var resolutionFolder = gui.addFolder("Resolution");
+let resolutionFolder = gui.addFolder("Resolution");
 resolutionFolder.add(resolutionParameters, 'res32').name('32').listen().onChange(function () { setResolution(32); goJSONOptionsCallback(); uniformsChanged(); render(); });
 resolutionFolder.add(resolutionParameters, 'res64').name('64').listen().onChange(function () { setResolution(64); goJSONOptionsCallback(); uniformsChanged(); render(); });
 resolutionFolder.add(resolutionParameters, 'res128').name('128').listen().onChange(function () { setResolution(128); goJSONOptionsCallback(); uniformsChanged(); render(); });
@@ -48,8 +48,8 @@ function setChecked(prop) {
   resolutionParameters[prop] = true;
 }
 
-var colorFolder = gui.addFolder('Material colors (1)');
-var colorPalette = {
+let colorFolder = gui.addFolder('Material colors (1)');
+let colorPalette = {
   color1: [255, 0, 0, 1.0],
   color2: [0, 255, 0, 1.0],
   color3: [0, 0, 255, 1.0],
@@ -67,16 +67,16 @@ var colorPalette = {
   color15: [64, 64, 128, 1.0],
   color16: [64, 128, 128, 1.0],
 };
-
-var colorControllers = [
+function getColorPalette() { return colorPalette; }
+let colorControllers = [
 ];
 
 function refreshMaterialColorControllers(names) {
-  for (var i = 0; i < colorControllers.length; i++) {
+  for (let i = 0; i < colorControllers.length; i++) {
     colorFolder.remove(colorControllers[i]);
   }
   colorControllers = [];
-  for (var i = 1; i <= names.length; i++) {
+  for (let i = 1; i <= names.length; i++) {
     let name = names[i - 1];
     let colorName = 'color' + i.toString();
     let uniformName = 'u_color' + i.toString();
@@ -91,6 +91,62 @@ function refreshMaterialColorControllers(names) {
   }
 }
 refreshMaterialColorControllers(['PLA']);
+
+let rangeFolder = gui.addFolder('View Ranges');
+let rangeValues = {
+  // These values represent the current settings which get copied to the uniforms:
+  llx: 0.0,
+  lly: 0.0,
+  llz: 0.0,
+  urx: 1.0,
+  ury: 1.0,
+  urz: 1.0,
+  // These values represent the absolute limits from the JSON blob:
+  minx: 0.0,
+  miny: 0.0,
+  minz: 0.0,
+  maxx: 1.0,
+  maxy: 1.0,
+  maxz: 1.0,
+};
+function getRangeValues() { return rangeValues; }
+let rangeControllers = [
+];
+function refreshRangeControllers() {
+  for (let i = 0; i < rangeControllers.length; i++) {
+    rangeFolder.remove(rangeControllers[i]);
+  }
+  rangeControllers = [
+    rangeFolder.add(rangeValues, 'llx', rangeValues.minx, rangeValues.maxx).listen().onChange(rangeChanged('llx', 0)),
+    rangeFolder.add(rangeValues, 'lly', rangeValues.miny, rangeValues.maxy).listen().onChange(rangeChanged('lly', 1)),
+    rangeFolder.add(rangeValues, 'llz', rangeValues.minz, rangeValues.maxz).listen().onChange(rangeChanged('llz', 2)),
+    rangeFolder.add(rangeValues, 'urx', rangeValues.minx, rangeValues.maxx).listen().onChange(rangeChanged('urx', 3)),
+    rangeFolder.add(rangeValues, 'ury', rangeValues.miny, rangeValues.maxy).listen().onChange(rangeChanged('ury', 4)),
+    rangeFolder.add(rangeValues, 'urz', rangeValues.minz, rangeValues.maxz).listen().onChange(rangeChanged('urz', 5)),
+  ];
+}
+function rangeChanged(name, index) {
+  if (name.substr(0, 2) === 'll') {
+    let other = 'ur' + name.substr(2, 1);
+    return function () {
+      if (rangeValues[name] > rangeValues[other]) {
+        rangeValues[other] = rangeValues[name];
+        rangeControllers[index + 3].setValue(rangeValues[other]);
+      }
+      rangeValuesChanged();
+      render();
+    }
+  }
+  let other = 'll' + name.substr(2, 1);
+  return function () {
+    if (rangeValues[name] < rangeValues[other]) {
+      rangeValues[other] = rangeValues[name];
+      rangeControllers[index - 3].setValue(rangeValues[other]);
+    }
+    rangeValuesChanged();
+    render();
+  }
+}
 
 // Set up Monaco editor...
 
@@ -118,7 +174,7 @@ let compileShader = function () {
   if (goCompileCallback == null) {
     console.log('TODO: Compile shader.');
   } else {
-    var currentSelection = editor.getSelection();
+    let currentSelection = editor.getSelection();
     // Clear decorations.
     decorations = editor.deltaDecorations(decorations, []);
     goCompileCallback();
@@ -197,10 +253,6 @@ require(["vs/editor/editor.main"], function () {
 // Rendering...
 
 const vs = `#version 300 es
-// A matrix to transform the positions.
-uniform vec3 u_ll;
-uniform vec3 u_ur;
-uniform mat4 u_matrix;
 out vec4 v_xyz;
 void main() {
   gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );
@@ -262,11 +314,9 @@ renderer.autoClear = false;
 const uniforms = {
   u_ll: { type: 'v3', value: new THREE.Vector3() }, // MBB min
   u_ur: { type: 'v3', value: new THREE.Vector3() },  // MBB max
-  u_matrix: { type: 'm4', value: new THREE.Matrix4() },
   u_resolution: { type: 'float', value: 512.0 },
   u_numMaterials: { type: 'int', value: 1 },
   u_d: { type: 'float', value: 0.0 },
-  // TODO: Make all the colors configurable through the GUI.
   u_color1: { type: 'v4', value: new THREE.Vector4(1, 0, 0, 1) },
   u_color2: { type: 'v4', value: new THREE.Vector4(0, 1, 0, 1) },
   u_color3: { type: 'v4', value: new THREE.Vector4(0, 0, 1, 1) },
@@ -300,35 +350,43 @@ let compilerSource = '';
 function loadNewModel(source) {
   console.log("Compiling new model.");
   compilerSource = source;
-  let ll = uniforms.u_ll.value;
-  let ur = uniforms.u_ur.value;
-  setMBB(ll.x, ll.y, ll.z, ur.x, ur.y, ur.z, uniforms.u_numMaterials.value);
+  uniformsChanged();
   render();
 }
 
 function getLookAt() {
-  const ll = uniforms.u_ll.value;
-  const ur = uniforms.u_ur.value;
+  const ll = new THREE.Vector3(rangeValues.minx, rangeValues.miny, rangeValues.minz);
+  const ur = new THREE.Vector3(rangeValues.maxx, rangeValues.maxy, rangeValues.maxz);
   const cx = 0.5 * (ll.x + ur.x);
   const cy = 0.5 * (ll.y + ur.y);
   const cz = 0.5 * (ll.z + ur.z);
   return [cx, cy, cz];
 }
-function setMBB(llx, lly, llz, urx, ury, urz, numMaterials) {
-  uniforms.u_numMaterials.value = numMaterials;
+function uniformsChanged() {
+  refreshRangeControllers();
+  rangeValuesChanged();
+}
+function rangeValuesChanged() {
+  const llx = rangeValues.llx;
+  const lly = rangeValues.lly;
+  const llz = rangeValues.llz;
+  const urx = rangeValues.urx;
+  const ury = rangeValues.ury;
+  const urz = rangeValues.urz;
   uniforms.u_ll.value.set(llx, lly, llz);
   uniforms.u_ur.value.set(urx, ury, urz);
-  uniformsChanged();
-}
-function uniformsChanged() {
-  let urx = uniforms.u_ur.value.x;
-  let ury = uniforms.u_ur.value.y;
-  let urz = uniforms.u_ur.value.z;
   let maxval = (urx > ury) ? ury : ury;
   maxval = (maxval > urz) ? maxval : urz;
   resetCameraD = maxval;
 
-  const diagonal = new THREE.Vector3().subVectors(uniforms.u_ur.value, uniforms.u_ll.value).length();
+  const ll = new THREE.Vector3(llx, lly, llz);
+  const ur = new THREE.Vector3(urx, ury, urz);
+  const minD = -ll.length();
+  const maxD = ur.length();
+  let diagonal = maxD - minD;
+  if (diagonal <= 0.0) {
+    diagonal = 1.0;  // Avoid divide-by-zero.
+  }
 
   scene.dispose();  // This alone is not enough. Need to create a brand new scene.
   scene = new THREE.Scene();  // Eventually add a light?
@@ -336,17 +394,15 @@ function uniformsChanged() {
   modelCentroidNull = new THREE.Object3D()
   scene.add(modelCentroidNull);
   // modelCentroidNull.add(new THREE.AxesHelper(diagonal));  // for debugging
-  // TODO: make this a GUI option:
+  // TODO: make this a GUI option?
   scene.add(new THREE.AxesHelper(diagonal));
 
   const dStep = diagonal / (uniforms.u_resolution.value + 1.0);
-  const minD = -0.5 * diagonal;
-  const maxD = 0.5 * diagonal;
   for (let d = minD + dStep; d < maxD; d += dStep) {
     let myUniforms = copyUniforms();
     myUniforms.u_d.value = (d - minD) / (maxD - dStep - minD);
     let material = new THREE.ShaderMaterial({ uniforms: myUniforms, vertexShader: vs, fragmentShader: fsHeader + compilerSource, side: THREE.DoubleSide, transparent: true });
-    let plane = new THREE.PlaneBufferGeometry(diagonal, diagonal);
+    let plane = new THREE.PlaneBufferGeometry(diagonal, diagonal);  // Should this always fill the viewport?
     let mesh = new THREE.Mesh(plane, material);
     mesh.position.set(0, 0, d);
     modelCentroidNull.add(mesh);
@@ -410,50 +466,50 @@ function commonViewCalc(left, right, top, bottom) {
 }
 function rightView() {
   // console.log('rightView');
-  let left = uniforms.u_ll.value.y;
-  let right = uniforms.u_ur.value.y;
-  let top = uniforms.u_ur.value.z;
-  let bottom = uniforms.u_ll.value.z;
+  let left = rangeValues.miny;
+  let right = rangeValues.maxy;
+  let top = rangeValues.maxz;
+  let bottom = rangeValues.minz;
   return commonViewCalc(left, right, top, bottom);
 }
 function leftView() {
   // console.log('leftView');
-  let left = uniforms.u_ur.value.y;
-  let right = uniforms.u_ll.value.y;
-  let top = uniforms.u_ur.value.z;
-  let bottom = uniforms.u_ll.value.z;
+  let left = rangeValues.maxy;
+  let right = rangeValues.miny;
+  let top = rangeValues.maxz;
+  let bottom = rangeValues.minz;
   return commonViewCalc(left, right, top, bottom);
 }
 function backView() {
   // console.log('backView');
-  let left = uniforms.u_ur.value.x;
-  let right = uniforms.u_ll.value.x;
-  let top = uniforms.u_ur.value.z;
-  let bottom = uniforms.u_ll.value.z;
+  let left = rangeValues.maxx;
+  let right = rangeValues.minx;
+  let top = rangeValues.maxz;
+  let bottom = rangeValues.minz;
   return commonViewCalc(left, right, top, bottom);
 }
 function frontView() {
   // console.log('frontView');
-  let left = uniforms.u_ll.value.x;
-  let right = uniforms.u_ur.value.x;
-  let top = uniforms.u_ur.value.z;
-  let bottom = uniforms.u_ll.value.z;
+  let left = rangeValues.minx;
+  let right = rangeValues.maxx;
+  let top = rangeValues.maxz;
+  let bottom = rangeValues.minz;
   return commonViewCalc(left, right, top, bottom);
 }
 function topView() {
   // console.log('topView');
-  let left = uniforms.u_ll.value.x;
-  let right = uniforms.u_ur.value.x;
-  let top = uniforms.u_ur.value.y;
-  let bottom = uniforms.u_ll.value.y;
+  let left = rangeValues.minx;
+  let right = rangeValues.maxx;
+  let top = rangeValues.maxy;
+  let bottom = rangeValues.miny;
   return commonViewCalc(left, right, top, bottom);
 }
 function bottomView() {
   // console.log('bottomView');
-  let left = uniforms.u_ll.value.x;
-  let right = uniforms.u_ur.value.x;
-  let top = uniforms.u_ll.value.y;
-  let bottom = uniforms.u_ur.value.y;
+  let left = rangeValues.minx;
+  let right = rangeValues.maxx;
+  let top = rangeValues.miny;
+  let bottom = rangeValues.maxy;
   return commonViewCalc(left, right, top, bottom);
 }
 
@@ -690,25 +746,25 @@ function animate() {
   requestAnimationFrame(animate);
 }
 
-var errorRE = /ERROR: (\d+):(\d+):/;
+let errorRE = /ERROR: (\d+):(\d+):/;
 function checkCompilerErrors() {
-  var currentCode = fsHeader + compilerSource;
-  for (var i = 0; i < renderer.info.programs.length; i++) {
-    var program = renderer.info.programs[i];
+  let currentCode = fsHeader + compilerSource;
+  for (let i = 0; i < renderer.info.programs.length; i++) {
+    let program = renderer.info.programs[i];
     if (program.name !== 'ShaderMaterial' || !program.diagnostics) {
       continue;
     }
     if (program.code.substr(0, currentCode.length) !== currentCode) {
       continue
     }
-    if (program.diagnostics.fragmentShader.log) {  // Note - 5 is hard-coded based on current source.
-      var log = program.diagnostics.fragmentShader.log;
-      var logfDiv = document.getElementById('logf');
-      var match = errorRE.exec(log);
+    if (program.diagnostics.fragmentShader.log) {
+      let log = program.diagnostics.fragmentShader.log;
+      let logfDiv = document.getElementById('logf');
+      let match = errorRE.exec(log);
       if (match) {
         // highlight the error location.
-        var column = match[1];
-        var line = match[2] - 125;  // Note - hard-coded based on current source.
+        let column = match[1];
+        let line = match[2] - 129;  // Note - hard-coded based on current source.
         highlightShaderError(line, column);
         log = 'ERROR: ' + (parseInt(column, 10) + 1).toString() + ':' + line.toString() + ':' + log.substr(match[0].length);
       }
@@ -735,33 +791,33 @@ function render() {
   renderer.setViewport(fullViewport);
 }
 
-let sliceScene = null;
-const rtWidth = 512;
-const rtHeight = 512;
-const sliceRenderTarget = new THREE.WebGLRenderTarget(rtWidth, rtHeight);
-let pixelBuffer = null;
-function getPixelBuffer() { return pixelBuffer; }
-function renderSliceToTexture(z) {
-  console.log("Rendering slice at z=", z);
-  if (sliceScene != null) {
-    sliceScene.dispose();
-  }
-  sliceScene = new THREE.Scene();
-  const width = uniforms.u_ur.value.x - uniforms.u_ll.value.x;
-  const height = uniforms.u_ur.value.y - uniforms.u_ll.value.y;
-  let slicePlane = new THREE.PlaneBufferGeometry(width, height);
-  let sliceMesh = new THREE.Mesh(slicePlane, material);
-  sliceMesh.position.set(0, 0, z);
-  sliceScene.add(sliceMesh);
-  let sliceCamera = new THREE.OrthographicCamera(
-    uniforms.u_ll.value.x, uniforms.u_ur.value.x,
-    uniforms.u_ur.value.y, uniforms.u_ll.value.y, 0.1, 1000);
+// let sliceScene = null;
+// const rtWidth = 512;
+// const rtHeight = 512;
+// const sliceRenderTarget = new THREE.WebGLRenderTarget(rtWidth, rtHeight);
+// let pixelBuffer = null;
+// function getPixelBuffer() { return pixelBuffer; }
+// function renderSliceToTexture(z) {
+//   console.log("Rendering slice at z=", z);
+//   if (sliceScene != null) {
+//     sliceScene.dispose();
+//   }
+//   sliceScene = new THREE.Scene();
+//   const width = uniforms.u_ur.value.x - uniforms.u_ll.value.x;
+//   const height = uniforms.u_ur.value.y - uniforms.u_ll.value.y;
+//   let slicePlane = new THREE.PlaneBufferGeometry(width, height);
+//   let sliceMesh = new THREE.Mesh(slicePlane, material);
+//   sliceMesh.position.set(0, 0, z);
+//   sliceScene.add(sliceMesh);
+//   let sliceCamera = new THREE.OrthographicCamera(
+//     uniforms.u_ll.value.x, uniforms.u_ur.value.x,
+//     uniforms.u_ur.value.y, uniforms.u_ll.value.y, 0.1, 1000);
 
-  renderer.setRenderTarget(sliceRenderTarget);
-  renderer.render(sliceScene, sliceCamera);
+//   renderer.setRenderTarget(sliceRenderTarget);
+//   renderer.render(sliceScene, sliceCamera);
 
-  pixelBuffer = new Uint8Array(4 * rtWidth * rtHeight);
-  renderer.readRenderTargetPixels(sliceRenderTarget, 0, 0, rtWidth, rtHeight, pixelBuffer);
+//   pixelBuffer = new Uint8Array(4 * rtWidth * rtHeight);
+//   renderer.readRenderTargetPixels(sliceRenderTarget, 0, 0, rtWidth, rtHeight, pixelBuffer);
 
-  renderer.setRenderTarget(null);
-}
+//   renderer.setRenderTarget(null);
+// }
