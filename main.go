@@ -110,17 +110,22 @@ func initShader(src []byte) interface{} {
 			}
 		}
 	}
+
 	uniforms := js.Global().Call("getUniforms")
-	if uniforms.Type() != js.TypeNull && uniforms.Type() != js.TypeUndefined {
+	colorPalette := js.Global().Call("getColorPalette")
+	if uniforms.Type() != js.TypeNull && uniforms.Type() != js.TypeUndefined &&
+		colorPalette.Type() != js.TypeNull && colorPalette.Type() != js.TypeUndefined {
 		setColor := func(n int, v *rgba) {
 			if v == nil {
 				return
 			}
-			color := js.Global().Get("colorPalette").Get(fmt.Sprintf("color%v", n))
-			color.SetIndex(0, v[0])
-			color.SetIndex(1, v[1])
-			color.SetIndex(2, v[2])
-			color.SetIndex(3, v[3])
+			color := colorPalette.Get(fmt.Sprintf("color%v", n))
+			if color.Type() != js.TypeNull && color.Type() != js.TypeUndefined {
+				color.SetIndex(0, v[0])
+				color.SetIndex(1, v[1])
+				color.SetIndex(2, v[2])
+				color.SetIndex(3, v[3])
+			}
 			uniforms.Get(fmt.Sprintf("u_color%v", n)).Get("value").Call("set", v[0]/255.0, v[1]/255.0, v[2]/255.0, v[3])
 		}
 		setColor(1, jsonBlob.Options.Color1)
@@ -142,16 +147,32 @@ func initShader(src []byte) interface{} {
 	}
 
 	// Set the GUI to the correct number of materials and their color editors.
-	js.Global().Get("colorFolder").Set("name", fmt.Sprintf("Material colors (%v)", len(jsonBlob.Materials)))
-	jsArray := js.ValueOf([]interface{}{})
-	for i, name := range jsonBlob.Materials {
-		jsArray.SetIndex(i, name)
+	colorFolder := js.Global().Get("colorFolder")
+	if colorFolder.Type() != js.TypeNull && colorFolder.Type() != js.TypeUndefined {
+		colorFolder.Set("name", fmt.Sprintf("Material colors (%v)", len(jsonBlob.Materials)))
+		jsArray := js.ValueOf([]interface{}{})
+		for i, name := range jsonBlob.Materials {
+			jsArray.SetIndex(i, name)
+		}
+		js.Global().Call("refreshMaterialColorControllers", jsArray)
 	}
-	js.Global().Call("refreshMaterialColorControllers", jsArray)
 
 	// Set the updated MBB and number of materials:
-	js.Global().Call("setMBB", jsonBlob.Min[0], jsonBlob.Min[1], jsonBlob.Min[2],
-		jsonBlob.Max[0], jsonBlob.Max[1], jsonBlob.Max[2], len(jsonBlob.Materials))
+	rangeValues := js.Global().Call("getRangeValues")
+	if rangeValues.Type() != js.TypeNull && rangeValues.Type() != js.TypeUndefined {
+		rangeValues.Set("llx", jsonBlob.Min[0])
+		rangeValues.Set("minx", jsonBlob.Min[0])
+		rangeValues.Set("lly", jsonBlob.Min[1])
+		rangeValues.Set("miny", jsonBlob.Min[1])
+		rangeValues.Set("llz", jsonBlob.Min[2])
+		rangeValues.Set("minz", jsonBlob.Min[2])
+		rangeValues.Set("urx", jsonBlob.Max[0])
+		rangeValues.Set("maxx", jsonBlob.Max[0])
+		rangeValues.Set("ury", jsonBlob.Max[1])
+		rangeValues.Set("maxy", jsonBlob.Max[1])
+		rangeValues.Set("urz", jsonBlob.Max[2])
+		rangeValues.Set("maxz", jsonBlob.Max[2])
+	}
 
 	// logf("Compiling new model shader:\n%v", shaderSrc)
 	js.Global().Call("loadNewModel", shaderSrc+fsFooter(len(jsonBlob.Materials)))
@@ -374,8 +395,8 @@ float sphere(in vec3 pos, in float radius, in vec3 xyz) {
 }
 
 void mainModel4( out vec4 materials, in vec3 xyz ) {
-  const float radius = 5.0;  // 10mm diameter sphere.
-  materials[0] = sphere(vec3(0), radius, xyz);
+  const float radius = 6.0;
+  materials[0] = 1.0 - sphere(vec3(0), radius, xyz);
 }
 `
 
@@ -418,14 +439,14 @@ func fsFooter(numMaterials int) string {
 
 const fsFooterFmt4 = `
 void main() {
-  if (any(lessThanEqual(abs(v_xyz.xyz),u_ll))) {
+  if (any(lessThan(v_xyz.xyz,u_ll))) {
     out_FragColor = vec4(0);
-    // out_FragColor = vec4(1);  // DEBUG
+    // out_FragColor = vec4(0,1,0,1);  // DEBUG
     return;
   }
-  if (any(greaterThanEqual(abs(v_xyz.xyz),u_ur))) {
+  if (any(greaterThan(v_xyz.xyz,u_ur))) {
     out_FragColor = vec4(0);
-    // out_FragColor = vec4(1);  // DEBUG
+    // out_FragColor = vec4(0,0,1,1);  // DEBUG
     return;
 	}
   vec4 m;
@@ -437,12 +458,12 @@ void main() {
 
 const fsFooterFmt9 = `
 void main() {
-  if (any(lessThanEqual(abs(v_xyz.xyz),u_ll))) {
+  if (any(lessThan(v_xyz.xyz,u_ll))) {
 		out_FragColor = vec4(0);
     // out_FragColor = vec4(1);  // DEBUG
     return;
   }
-  if (any(greaterThanEqual(abs(v_xyz.xyz),u_ur))) {
+  if (any(greaterThan(v_xyz.xyz,u_ur))) {
 		out_FragColor = vec4(0);
     // out_FragColor = vec4(1);  // DEBUG
     return;
@@ -456,12 +477,12 @@ void main() {
 
 const fsFooterFmt16 = `
 void main() {
-  if (any(lessThanEqual(abs(v_xyz.xyz),u_ll))) {
+  if (any(lessThan(v_xyz.xyz,u_ll))) {
 		out_FragColor = vec4(0);
     // out_FragColor = vec4(1);  // DEBUG
     return;
   }
-  if (any(greaterThanEqual(abs(v_xyz.xyz),u_ur))) {
+  if (any(greaterThan(v_xyz.xyz,u_ur))) {
 		out_FragColor = vec4(0);
     // out_FragColor = vec4(1);  // DEBUG
     return;
