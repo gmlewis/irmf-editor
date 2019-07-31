@@ -144,10 +144,13 @@ func initShader(src []byte) interface{} {
 		setColor(14, jsonBlob.Options.Color14)
 		setColor(15, jsonBlob.Options.Color15)
 		setColor(16, jsonBlob.Options.Color16)
+
+		// Set the number of materials:
+		uniforms.Get("u_numMaterials").Set("value", len(jsonBlob.Materials))
 	}
 
 	// Set the GUI to the correct number of materials and their color editors.
-	colorFolder := js.Global().Get("colorFolder")
+	colorFolder := js.Global().Call("getColorFolder")
 	if colorFolder.Type() != js.TypeNull && colorFolder.Type() != js.TypeUndefined {
 		colorFolder.Set("name", fmt.Sprintf("Material colors (%v)", len(jsonBlob.Materials)))
 		jsArray := js.ValueOf([]interface{}{})
@@ -157,7 +160,7 @@ func initShader(src []byte) interface{} {
 		js.Global().Call("refreshMaterialColorControllers", jsArray)
 	}
 
-	// Set the updated MBB and number of materials:
+	// Set the updated MBB:
 	rangeValues := js.Global().Call("getRangeValues")
 	if rangeValues.Type() != js.TypeNull && rangeValues.Type() != js.TypeUndefined {
 		rangeValues.Set("llx", jsonBlob.Min[0])
