@@ -116,6 +116,12 @@ func TestGenColorMixer(t *testing.T) {
 			wantColorMixer: "u_d*(hsv(m.x,m.y,m.w) + u_color1*m.z)",
 			wantColorNames: []string{"extra"},
 		},
+		{
+			name:           "One RGB triplet",
+			materialNames:  []string{"PLA.R", "PLA.G", "PLA.B"},
+			wantColorMixer: "u_d*(vec4(m.x,m.y,m.z,1.0))",
+			rgbs:           rgbMap{"PLA": &rgbT{R: 1, G: 2, B: 3}},
+		},
 	}
 
 	for _, tt := range tests {
