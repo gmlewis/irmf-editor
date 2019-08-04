@@ -644,7 +644,10 @@ func genColorMixer(materialNames []string, hsvs hsvMap, hsls hslMap, rgbs rgbMap
 		usedColors[v.R] = true
 		usedColors[v.G] = true
 		usedColors[v.B] = true
-		finalColors = append(finalColors, fmt.Sprintf("vec4(%v,%v,%v,1.0)", colorToMaterial(v.R), colorToMaterial(v.G), colorToMaterial(v.B)))
+		r := colorToMaterial(v.R)
+		g := colorToMaterial(v.G)
+		b := colorToMaterial(v.B)
+		finalColors = append(finalColors, fmt.Sprintf("vec4(%v,%v,%v,max(%v,max(%v,%v)))", r, g, b, r, g, b))
 	}
 
 	var colorNames []string
@@ -763,10 +766,10 @@ vec4 hsv(float h, float s, float v) {
   float k5 = mod(5.0+6.0*h, 6.0);
   float k3 = mod(3.0+6.0*h, 6.0);
   float k1 = mod(1.0+6.0*h, 6.0);
-  float f5 = v - v*s*max(min(k5,4.0-k5,1.0),0.0);
-  float f3 = v - v*s*max(min(k3,4.0-k3,1.0),0.0);
-  float f1 = v - v*s*max(min(k1,4.0-k1,1.0),0.0);
-  return vec4(f5,f3,f1,1.0);
+  float f5 = v - v*s*max(min(k5,min(4.0-k5,1.0)),0.0);
+  float f3 = v - v*s*max(min(k3,min(4.0-k3,1.0)),0.0);
+  float f1 = v - v*s*max(min(k1,min(4.0-k1,1.0)),0.0);
+  return vec4(f5,f3,f1,max(f5,max(f3,f1)));
 }
 `
 
@@ -776,9 +779,9 @@ vec4 hsl(float h, float s, float l) {
   float k0 = mod(0.0+12.0*h, 12.0);
   float k8 = mod(8.0+12.0*h, 12.0);
   float k4 = mod(4.0+12.0*h, 12.0);
-  float f0 = l - a*max(min(k0-3.0,9.0-k0,1.0),-1.0);
-  float f8 = l - a*max(min(k8-3.0,9.0-k8,1.0),-1.0);
-  float f4 = l - a*max(min(k4-3.0,9.0-k4,1.0),-1.0);
-  return vec4(f0,f8,f4,1.0);
+  float f0 = l - a*max(min(k0-3.0,min(9.0-k0,1.0)),-1.0);
+  float f8 = l - a*max(min(k8-3.0,min(9.0-k8,1.0)),-1.0);
+  float f4 = l - a*max(min(k4-3.0,min(9.0-k4,1.0)),-1.0);
+  return vec4(f0,f8,f4,max(f0,max(f8,f4)));
 }
 `
