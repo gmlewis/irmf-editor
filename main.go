@@ -149,102 +149,117 @@ func initShader(src []byte) interface{} {
 		uniforms.Get("u_numMaterials").Set("value", len(jsonBlob.Materials))
 	}
 
-	// Set the GUI to the correct number of materials and their color editors.
-	// Also support HSV, HSL, and RGB full color models. If any material is
-	// listed three times with unique suffix triplets ('.H','.S','.V'),
-	// ('.H','.S','.L'), or ('.R','.G','.B'), they are combined to form a
-	// color in the editor using the appropriate color space model.
-	// See https://en.wikipedia.org/wiki/HSL_and_HSV for more information.
+	// Set the updated MBB:
+	rangeValues := js.Global().Call("getRangeValues")
+	if rangeValues.Type() != js.TypeNull && rangeValues.Type() != js.TypeUndefined {
+		rangeValues.Set("llx", jsonBlob.Min[0])
+		rangeValues.Set("minx", jsonBlob.Min[0])
+		rangeValues.Set("lly", jsonBlob.Min[1])
+		rangeValues.Set("miny", jsonBlob.Min[1])
+		rangeValues.Set("llz", jsonBlob.Min[2])
+		rangeValues.Set("minz", jsonBlob.Min[2])
+		rangeValues.Set("urx", jsonBlob.Max[0])
+		rangeValues.Set("maxx", jsonBlob.Max[0])
+		rangeValues.Set("ury", jsonBlob.Max[1])
+		rangeValues.Set("maxy", jsonBlob.Max[1])
+		rangeValues.Set("urz", jsonBlob.Max[2])
+		rangeValues.Set("maxz", jsonBlob.Max[2])
+	}
+
+	// logf("Compiling new model shader:\n%v", shaderSrc)
+	js.Global().Call("loadNewModel", shaderSrc+fsFooter(jsonBlob.Materials))
+
+	return nil
+}
+
+// processMaterialNames supports HSV, HSL, and RGB full color models.
+// If any material is listed three times with unique suffix triplets ('.H','.S','.V'),
+// ('.H','.S','.L'), or ('.R','.G','.B'), they are combined to form a
+// color in the editor using the appropriate color space model.
+// See https://en.wikipedia.org/wiki/HSL_and_HSV for more information.
+func processMaterialNames(materialNames []string) (hsvMap, hslMap, rgbMap) {
 	hsvs := hsvMap{}
 	hsls := hslMap{}
 	rgbs := rgbMap{}
-	colorFolder := js.Global().Call("getColorFolder")
-	if colorFolder.Type() != js.TypeNull && colorFolder.Type() != js.TypeUndefined {
-		// TODO: Only count the colors for non-full-color materials.
-		colorFolder.Set("name", fmt.Sprintf("Material colors (%v)", len(jsonBlob.Materials)))
-		jsArray := js.ValueOf([]interface{}{})
-		setH := func(name string, colorNum int) {
-			if v, ok := hsvs[name]; ok {
-				v.H = colorNum
-			} else {
-				hsvs[name] = hsvT{H: colorNum}
-			}
-			if v, ok := hsls[name]; ok {
-				v.H = colorNum
-			} else {
-				hsls[name] = hslT{H: colorNum}
+	setH := func(name string, colorNum int) {
+		if v, ok := hsvs[name]; ok {
+			v.H = colorNum
+		} else {
+			hsvs[name] = &hsvT{H: colorNum}
+		}
+		if v, ok := hsls[name]; ok {
+			v.H = colorNum
+		} else {
+			hsls[name] = &hslT{H: colorNum}
+		}
+	}
+	setS := func(name string, colorNum int) {
+		if v, ok := hsvs[name]; ok {
+			v.S = colorNum
+		} else {
+			hsvs[name] = &hsvT{S: colorNum}
+		}
+		if v, ok := hsls[name]; ok {
+			v.S = colorNum
+		} else {
+			hsls[name] = &hslT{S: colorNum}
+		}
+	}
+	setV := func(name string, colorNum int) {
+		if v, ok := hsvs[name]; ok {
+			v.V = colorNum
+		} else {
+			hsvs[name] = &hsvT{V: colorNum}
+		}
+	}
+	setL := func(name string, colorNum int) {
+		if v, ok := hsls[name]; ok {
+			v.L = colorNum
+		} else {
+			hsls[name] = &hslT{L: colorNum}
+		}
+	}
+	setR := func(name string, colorNum int) {
+		if v, ok := rgbs[name]; ok {
+			v.R = colorNum
+		} else {
+			rgbs[name] = &rgbT{R: colorNum}
+		}
+	}
+	setG := func(name string, colorNum int) {
+		if v, ok := rgbs[name]; ok {
+			v.G = colorNum
+		} else {
+			rgbs[name] = &rgbT{G: colorNum}
+		}
+	}
+	setB := func(name string, colorNum int) {
+		if v, ok := rgbs[name]; ok {
+			v.B = colorNum
+		} else {
+			rgbs[name] = &rgbT{B: colorNum}
+		}
+	}
+	for i, name := range materialNames {
+		if len(name) > 2 {
+			baseName := name[0 : len(name)-2]
+			switch {
+			case strings.HasSuffix(name, ".H"): // Make entries for both HSV and HSL, then clean up below.
+				setH(baseName, i+1)
+			case strings.HasSuffix(name, ".S"): // Make entries for both HSV and HSL, then clean up below.
+				setS(baseName, i+1)
+			case strings.HasSuffix(name, ".V"):
+				setV(baseName, i+1)
+			case strings.HasSuffix(name, ".L"):
+				setL(baseName, i+1)
+			case strings.HasSuffix(name, ".R"):
+				setR(baseName, i+1)
+			case strings.HasSuffix(name, ".G"):
+				setG(baseName, i+1)
+			case strings.HasSuffix(name, ".B"):
+				setB(baseName, i+1)
 			}
 		}
-		setS := func(name string, colorNum int) {
-			if v, ok := hsvs[name]; ok {
-				v.S = colorNum
-			} else {
-				hsvs[name] = hsvT{S: colorNum}
-			}
-			if v, ok := hsls[name]; ok {
-				v.S = colorNum
-			} else {
-				hsls[name] = hslT{S: colorNum}
-			}
-		}
-		setV := func(name string, colorNum int) {
-			if v, ok := hsvs[name]; ok {
-				v.V = colorNum
-			} else {
-				hsvs[name] = hsvT{V: colorNum}
-			}
-		}
-		setL := func(name string, colorNum int) {
-			if v, ok := hsls[name]; ok {
-				v.L = colorNum
-			} else {
-				hsls[name] = hslT{L: colorNum}
-			}
-		}
-		setR := func(name string, colorNum int) {
-			if v, ok := rgbs[name]; ok {
-				v.R = colorNum
-			} else {
-				rgbs[name] = rgbT{R: colorNum}
-			}
-		}
-		setG := func(name string, colorNum int) {
-			if v, ok := rgbs[name]; ok {
-				v.G = colorNum
-			} else {
-				rgbs[name] = rgbT{G: colorNum}
-			}
-		}
-		setB := func(name string, colorNum int) {
-			if v, ok := rgbs[name]; ok {
-				v.B = colorNum
-			} else {
-				rgbs[name] = rgbT{B: colorNum}
-			}
-		}
-		for i, name := range jsonBlob.Materials {
-			jsArray.SetIndex(i, name)
-			if len(name) > 2 {
-				baseName := name[0 : len(name)-2]
-				switch {
-				case strings.HasSuffix(name, ".H"): // Make entries for both HSV and HSL, then clean up later.
-					setH(name, i+1)
-				case strings.HasSuffix(name, ".S"): // Make entries for both HSV and HSL, then clean up later.
-					setS(name, i+1)
-				case strings.HasSuffix(name, ".V"):
-					setV(name, i+1)
-				case strings.HasSuffix(name, ".L"):
-					setL(name, i+1)
-				case strings.HasSuffix(name, ".R"):
-					setR(name, i+1)
-				case strings.HasSuffix(name, ".G"):
-					setG(name, i+1)
-				case strings.HasSuffix(name, ".B"):
-					setB(name, i+1)
-				}
-			}
-		}
-		js.Global().Call("refreshMaterialColorControllers", jsArray)
 	}
 
 	// Remove incomplete color models.
@@ -269,52 +284,23 @@ func initShader(src []byte) interface{} {
 		}
 	})
 
-	// Set the updated MBB:
-	rangeValues := js.Global().Call("getRangeValues")
-	if rangeValues.Type() != js.TypeNull && rangeValues.Type() != js.TypeUndefined {
-		rangeValues.Set("llx", jsonBlob.Min[0])
-		rangeValues.Set("minx", jsonBlob.Min[0])
-		rangeValues.Set("lly", jsonBlob.Min[1])
-		rangeValues.Set("miny", jsonBlob.Min[1])
-		rangeValues.Set("llz", jsonBlob.Min[2])
-		rangeValues.Set("minz", jsonBlob.Min[2])
-		rangeValues.Set("urx", jsonBlob.Max[0])
-		rangeValues.Set("maxx", jsonBlob.Max[0])
-		rangeValues.Set("ury", jsonBlob.Max[1])
-		rangeValues.Set("maxy", jsonBlob.Max[1])
-		rangeValues.Set("urz", jsonBlob.Max[2])
-		rangeValues.Set("maxz", jsonBlob.Max[2])
-	}
-
-	// logf("Compiling new model shader:\n%v", shaderSrc)
-	js.Global().Call("loadNewModel", shaderSrc+fsFooter(len(jsonBlob.Materials), hsvs, hsls, rgbs))
-
-	return nil
+	return hsvs, hsls, rgbs
 }
 
-type hsvT struct {
-	H int
-	S int
-	V int
-}
+// hsvT maps each color channel to a color number for an HSV color model.
+type hsvT struct{ H, S, V int }
 
-type hslT struct {
-	H int
-	S int
-	L int
-}
+// hslT maps each color channel to a color number for an HSL color model.
+type hslT struct{ H, S, L int }
 
-type rgbT struct {
-	R int
-	G int
-	B int
-}
+// rgbT maps each color channel to a color number for an RGB color model.
+type rgbT struct{ R, G, B int }
 
 // hsvMap maps a material prefix name (e.g. "PLA") to the material numbers
 // (1-based index) for each of its components. So if the materials were:
 // ["metal", "PLA.V", "dielectric", "PLA.H", "PLA.S"], then the map entry
 // would be: "PLA": {H: 4, S: 5, V: 2}.
-type hsvMap map[string]hsvT
+type hsvMap map[string]*hsvT
 
 func (m hsvMap) keys() (result []string) {
 	for k := range m {
@@ -327,7 +313,7 @@ func (m hsvMap) keys() (result []string) {
 // (1-based index) for each of its components. So if the materials were:
 // ["metal", "PLA.L", "dielectric", "PLA.H", "PLA.S"], then the map entry
 // would be: "PLA": {H: 4, S: 5, L: 2}.
-type hslMap map[string]hslT
+type hslMap map[string]*hslT
 
 func (m hslMap) keys() (result []string) {
 	for k := range m {
@@ -340,7 +326,7 @@ func (m hslMap) keys() (result []string) {
 // (1-based index) for each of its components. So if the materials were:
 // ["metal", "PLA.B", "dielectric", "PLA.R", "PLA.G"], then the map entry
 // would be: "PLA": {R: 4, G: 5, B: 2}.
-type rgbMap map[string]rgbT
+type rgbMap map[string]*rgbT
 
 func (m rgbMap) keys() (result []string) {
 	for k := range m {
@@ -569,51 +555,51 @@ void mainModel4( out vec4 materials, in vec3 xyz ) {
 }
 `
 
-func fsFooter(numMaterials int, hsvs hsvMap, hsls hslMap, rgbs rgbMap) string {
-	if len(hsvs) == 0 && len(hsls) == 0 && len(rgbs) == 0 {
-		switch numMaterials {
-		default:
-			return fmt.Sprintf(fsFooterFmt4, "u_d*u_color1*m.x")
-		case 2:
-			return fmt.Sprintf(fsFooterFmt4, "u_d*(u_color1*m.x + u_color2*m.y)")
-		case 3:
-			return fmt.Sprintf(fsFooterFmt4, "u_d*(u_color1*m.x + u_color2*m.y + u_color3*m.z)")
-		case 4:
-			return fmt.Sprintf(fsFooterFmt4, "u_d*(u_color1*m.x + u_color2*m.y + u_color3*m.z + u_color4*m.w)")
-		case 5:
-			return fmt.Sprintf(fsFooterFmt9, "u_d*(u_color1*m[0][0] + u_color2*m[0][1] + u_color3*m[0][2] + u_color4*m[1][0] + u_color5*m[1][1])")
-		case 6:
-			return fmt.Sprintf(fsFooterFmt9, "u_d*(u_color1*m[0][0] + u_color2*m[0][1] + u_color3*m[0][2] + u_color4*m[1][0] + u_color5*m[1][1] + u_color6*m[1][2])")
-		case 7:
-			return fmt.Sprintf(fsFooterFmt9, "u_d*(u_color1*m[0][0] + u_color2*m[0][1] + u_color3*m[0][2] + u_color4*m[1][0] + u_color5*m[1][1] + u_color6*m[1][2] + u_color7*m[2][0])")
-		case 8:
-			return fmt.Sprintf(fsFooterFmt9, "u_d*(u_color1*m[0][0] + u_color2*m[0][1] + u_color3*m[0][2] + u_color4*m[1][0] + u_color5*m[1][1] + u_color6*m[1][2] + u_color7*m[2][0] + u_color8*m[2][1])")
-		case 9:
-			return fmt.Sprintf(fsFooterFmt9, "u_d*(u_color1*m[0][0] + u_color2*m[0][1] + u_color3*m[0][2] + u_color4*m[1][0] + u_color5*m[1][1] + u_color6*m[1][2] + u_color7*m[2][0] + u_color8*m[2][1] + u_color9*m[2][2])")
-		case 10:
-			return fmt.Sprintf(fsFooterFmt16, "u_d*(u_color1*m[0][0] + u_color2*m[0][1] + u_color3*m[0][2] + u_color4*m[0][3] + u_color5*m[1][0] + u_color6*m[1][1] + u_color7*m[1][2] + u_color8*m[1][3] + u_color9*m[2][0] + u_color10*m[2][1])")
-		case 11:
-			return fmt.Sprintf(fsFooterFmt16, "u_d*(u_color1*m[0][0] + u_color2*m[0][1] + u_color3*m[0][2] + u_color4*m[0][3] + u_color5*m[1][0] + u_color6*m[1][1] + u_color7*m[1][2] + u_color8*m[1][3] + u_color9*m[2][0] + u_color10*m[2][1] + u_color11*m[2][2])")
-		case 12:
-			return fmt.Sprintf(fsFooterFmt16, "u_d*(u_color1*m[0][0] + u_color2*m[0][1] + u_color3*m[0][2] + u_color4*m[0][3] + u_color5*m[1][0] + u_color6*m[1][1] + u_color7*m[1][2] + u_color8*m[1][3] + u_color9*m[2][0] + u_color10*m[2][1] + u_color11*m[2][2] + u_color12*m[2][3])")
-		case 13:
-			return fmt.Sprintf(fsFooterFmt16, "u_d*(u_color1*m[0][0] + u_color2*m[0][1] + u_color3*m[0][2] + u_color4*m[0][3] + u_color5*m[1][0] + u_color6*m[1][1] + u_color7*m[1][2] + u_color8*m[1][3] + u_color9*m[2][0] + u_color10*m[2][1] + u_color11*m[2][2] + u_color12*m[2][3] + u_color13*m[2][0])")
-		case 14:
-			return fmt.Sprintf(fsFooterFmt16, "u_d*(u_color1*m[0][0] + u_color2*m[0][1] + u_color3*m[0][2] + u_color4*m[0][3] + u_color5*m[1][0] + u_color6*m[1][1] + u_color7*m[1][2] + u_color8*m[1][3] + u_color9*m[2][0] + u_color10*m[2][1] + u_color11*m[2][2] + u_color12*m[2][3] + u_color13*m[2][0] + u_color14*m[2][1])")
-		case 15:
-			return fmt.Sprintf(fsFooterFmt16, "u_d*(u_color1*m[0][0] + u_color2*m[0][1] + u_color3*m[0][2] + u_color4*m[0][3] + u_color5*m[1][0] + u_color6*m[1][1] + u_color7*m[1][2] + u_color8*m[1][3] + u_color9*m[2][0] + u_color10*m[2][1] + u_color11*m[2][2] + u_color12*m[2][3] + u_color13*m[2][0] + u_color14*m[2][1] + u_color15*m[2][2])")
-		case 16:
-			return fmt.Sprintf(fsFooterFmt16, "u_d*(u_color1*m[0][0] + u_color2*m[0][1] + u_color3*m[0][2] + u_color4*m[0][3] + u_color5*m[1][0] + u_color6*m[1][1] + u_color7*m[1][2] + u_color8*m[1][3] + u_color9*m[2][0] + u_color10*m[2][1] + u_color11*m[2][2] + u_color12*m[2][3] + u_color13*m[2][0] + u_color14*m[2][1] + u_color15*m[2][2] + u_color16*m[2][3])")
+func fsFooter(materialNames []string) string {
+	hsvs, hsls, rgbs := processMaterialNames(materialNames)
+	footer, colorNames := processColors(materialNames, hsvs, hsls, rgbs)
+
+	colorFolder := js.Global().Call("getColorFolder")
+	if colorFolder.Type() != js.TypeNull && colorFolder.Type() != js.TypeUndefined {
+		// Only count the colors for non-full-color materials.
+		colorFolder.Set("name", fmt.Sprintf("Material colors (%v)", len(colorNames)))
+		jsArray := js.ValueOf([]interface{}{})
+		for i, name := range colorNames {
+			jsArray.SetIndex(i, name)
 		}
+		js.Global().Call("refreshMaterialColorControllers", jsArray)
 	}
 
+	return footer
+}
+
+// processColors returns a final fragment shader footer (which includes a color math
+// expression for mixing colors) and a list of final color names shown in
+// the GUI for setting colors on each non-full-color material.
+func processColors(materialNames []string, hsvs hsvMap, hsls hslMap, rgbs rgbMap) (string, []string) {
+	var prefixFuncs []string
+	if len(hsvs) > 0 {
+		prefixFuncs = append(prefixFuncs, hsvFunc)
+	}
+	if len(hsls) > 0 {
+		prefixFuncs = append(prefixFuncs, hslFunc)
+	}
+
+	footerFmt, colorMixer, colorNames := genColorMixer(materialNames, hsvs, hsls, rgbs)
+	footer := strings.Join(prefixFuncs, "\n") + fmt.Sprintf(footerFmt, colorMixer)
+	return footer, colorNames
+}
+
+// genColorMixer generates the pieces needed for processColors, and makes it easier to test.
+func genColorMixer(materialNames []string, hsvs hsvMap, hsls hslMap, rgbs rgbMap) (string, string, []string) {
 	var colorToMaterial func(colorNum int) string
 	var footerFmt string
+	numMaterials := len(materialNames)
 	switch numMaterials {
 	default:
 		footerFmt = fsFooterFmt4
 		colorToMaterial = func(colorNum int) string {
-			return []string{"m.x", "m.y", "m.z", "m.z"}[colorNum-1]
+			return []string{"m.x", "m.y", "m.z", "m.w"}[colorNum-1]
 		}
 	case 5, 6, 7, 8, 9:
 		footerFmt = fsFooterFmt9
@@ -624,6 +610,19 @@ func fsFooter(numMaterials int, hsvs hsvMap, hsls hslMap, rgbs rgbMap) string {
 		footerFmt = fsFooterFmt16
 		colorToMaterial = func(colorNum int) string {
 			return []string{"m[0][0]", "m[0][1]", "m[0][2]", "m[0][3]", "m[1][0]", "m[1][1]", "m[1][2]", "m[1][3]", "m[2][0]", "m[2][1]", "m[2][2]", "m[2][3]", "m[2][0]", "m[2][1]", "m[2][2]", "m[2][3]"}[colorNum-1]
+		}
+	case 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32:
+		footerFmt = fsFooterFmt32
+		colorToMaterial = func(colorNum int) string {
+			return []string{"mA[0][0]", "mA[0][1]", "mA[0][2]", "mA[0][3]", "mA[1][0]", "mA[1][1]", "mA[1][2]", "mA[1][3]", "mA[2][0]", "mA[2][1]", "mA[2][2]", "mA[2][3]", "mA[2][0]", "mA[2][1]", "mA[2][2]", "mA[2][3]",
+				"mB[0][0]", "mB[0][1]", "mB[0][2]", "mB[0][3]", "mB[1][0]", "mB[1][1]", "mB[1][2]", "mB[1][3]", "mB[2][0]", "mB[2][1]", "mB[2][2]", "mB[2][3]", "mB[2][0]", "mB[2][1]", "mB[2][2]", "mB[2][3]"}[colorNum-1]
+		}
+	case 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48:
+		footerFmt = fsFooterFmt32
+		colorToMaterial = func(colorNum int) string {
+			return []string{"mA[0][0]", "mA[0][1]", "mA[0][2]", "mA[0][3]", "mA[1][0]", "mA[1][1]", "mA[1][2]", "mA[1][3]", "mA[2][0]", "mA[2][1]", "mA[2][2]", "mA[2][3]", "mA[2][0]", "mA[2][1]", "mA[2][2]", "mA[2][3]",
+				"mB[0][0]", "mB[0][1]", "mB[0][2]", "mB[0][3]", "mB[1][0]", "mB[1][1]", "mB[1][2]", "mB[1][3]", "mB[2][0]", "mB[2][1]", "mB[2][2]", "mB[2][3]", "mB[2][0]", "mB[2][1]", "mB[2][2]", "mB[2][3]",
+				"mC[0][0]", "mC[0][1]", "mC[0][2]", "mC[0][3]", "mC[1][0]", "mC[1][1]", "mC[1][2]", "mC[1][3]", "mC[2][0]", "mC[2][1]", "mC[2][2]", "mC[2][3]", "mC[2][0]", "mC[2][1]", "mC[2][2]", "mC[2][3]"}[colorNum-1]
 		}
 	}
 
@@ -647,23 +646,18 @@ func fsFooter(numMaterials int, hsvs hsvMap, hsls hslMap, rgbs rgbMap) string {
 		usedColors[v.B] = true
 		finalColors = append(finalColors, fmt.Sprintf("vec4(%v,%v,%v,1.0)", colorToMaterial(v.R), colorToMaterial(v.G), colorToMaterial(v.B)))
 	}
+
+	var colorNames []string
 	nextColor := 1
 	for i := 1; i <= numMaterials; i++ {
 		if !usedColors[i] {
 			finalColors = append(finalColors, fmt.Sprintf("u_color%v*%v", nextColor, colorToMaterial(i)))
+			colorNames = append(colorNames, materialNames[i-1])
 			nextColor++
 		}
 	}
 
-	var prefixFuncs []string
-	if len(hsvs) > 0 {
-		prefixFuncs = append(prefixFuncs, hsvFunc)
-	}
-	if len(hsls) > 0 {
-		prefixFuncs = append(prefixFuncs, hslFunc)
-	}
-	colorMixer := fmt.Sprintf("u_d*(%v)", strings.Join(finalColors, " + "))
-	return strings.Join(prefixFuncs, "\n") + fmt.Sprintf(footerFmt, colorMixer)
+	return footerFmt, fmt.Sprintf("u_d*(%v)", strings.Join(finalColors, " + ")), colorNames
 }
 
 const fsFooterFmt4 = `
@@ -677,7 +671,7 @@ void main() {
     out_FragColor = vec4(0);
     // out_FragColor = vec4(0,0,1,1);  // DEBUG
     return;
-	}
+  }
   vec4 m;
   mainModel4(m, v_xyz.xyz);
   out_FragColor = %v;
@@ -688,38 +682,79 @@ void main() {
 const fsFooterFmt9 = `
 void main() {
   if (any(lessThan(v_xyz.xyz,u_ll))) {
-		out_FragColor = vec4(0);
+  out_FragColor = vec4(0);
     // out_FragColor = vec4(1);  // DEBUG
     return;
   }
   if (any(greaterThan(v_xyz.xyz,u_ur))) {
-		out_FragColor = vec4(0);
+  out_FragColor = vec4(0);
     // out_FragColor = vec4(1);  // DEBUG
     return;
   }
-	mat3 m;
-	mainModel9(m, v_xyz.xyz);
-	out_FragColor = %v;
-	// out_FragColor = v_xyz/5.0 + 0.5;  // DEBUG
+  mat3 m;
+  mainModel9(m, v_xyz.xyz);
+  out_FragColor = %v;
+  // out_FragColor = v_xyz/5.0 + 0.5;  // DEBUG
 }
 `
 
 const fsFooterFmt16 = `
 void main() {
   if (any(lessThan(v_xyz.xyz,u_ll))) {
-		out_FragColor = vec4(0);
+  out_FragColor = vec4(0);
     // out_FragColor = vec4(1);  // DEBUG
     return;
   }
   if (any(greaterThan(v_xyz.xyz,u_ur))) {
-		out_FragColor = vec4(0);
+  out_FragColor = vec4(0);
     // out_FragColor = vec4(1);  // DEBUG
     return;
   }
-	mat4 m;
-	mainModel16(m, v_xyz.xyz);
-	out_FragColor = %v;
-	// out_FragColor = v_xyz/5.0 + 0.5;  // DEBUG
+  mat4 m;
+  mainModel16(m, v_xyz.xyz);
+  out_FragColor = %v;
+  // out_FragColor = v_xyz/5.0 + 0.5;  // DEBUG
+}
+`
+
+const fsFooterFmt32 = `
+void main() {
+  if (any(lessThan(v_xyz.xyz,u_ll))) {
+  out_FragColor = vec4(0);
+    // out_FragColor = vec4(1);  // DEBUG
+    return;
+  }
+  if (any(greaterThan(v_xyz.xyz,u_ur))) {
+  out_FragColor = vec4(0);
+    // out_FragColor = vec4(1);  // DEBUG
+    return;
+  }
+  mat4 mA;
+  mat4 mB;
+  mainModel32(mA, mB, v_xyz.xyz);
+  out_FragColor = %v;
+  // out_FragColor = v_xyz/5.0 + 0.5;  // DEBUG
+}
+`
+
+const fsFooterFmt48 = `
+void main() {
+  if (any(lessThan(v_xyz.xyz,u_ll))) {
+  out_FragColor = vec4(0);
+    // out_FragColor = vec4(1);  // DEBUG
+    return;
+  }
+  if (any(greaterThan(v_xyz.xyz,u_ur))) {
+  out_FragColor = vec4(0);
+    // out_FragColor = vec4(1);  // DEBUG
+    return;
+  }
+  mat4 mA;
+  mat4 mB;
+  mat4 mC;
+  mainModel48(mA, mB, mC, v_xyz.xyz);
+  out_FragColor = %v;
+  // out_FragColor = v_xyz/5.0 + 0.5;  // DEBUG
 }
 `
 
