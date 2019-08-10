@@ -186,10 +186,10 @@ let compileShader = function () {
 function installCompileShader(cb) {
   goCompileCallback = cb;
 }
-// let goSliceCallback = null;
-// function installSliceShader(cb) {
-//   goSliceCallback = cb;
-// }
+let goSliceCallback = null;
+function installSliceShader(cb) {
+  goSliceCallback = cb;
+}
 let goJSONOptionsCallback = null;
 function installUpdateJSONOptionsCallback(cb) {
   goJSONOptionsCallback = cb;
@@ -792,33 +792,36 @@ function render() {
   renderer.setViewport(fullViewport);
 }
 
-// let sliceScene = null;
-// const rtWidth = 512;
-// const rtHeight = 512;
-// const sliceRenderTarget = new THREE.WebGLRenderTarget(rtWidth, rtHeight);
-// let pixelBuffer = null;
-// function getPixelBuffer() { return pixelBuffer; }
-// function renderSliceToTexture(z) {
-//   console.log("Rendering slice at z=", z);
-//   if (sliceScene != null) {
-//     sliceScene.dispose();
-//   }
-//   sliceScene = new THREE.Scene();
-//   const width = uniforms.u_ur.value.x - uniforms.u_ll.value.x;
-//   const height = uniforms.u_ur.value.y - uniforms.u_ll.value.y;
-//   let slicePlane = new THREE.PlaneBufferGeometry(width, height);
-//   let sliceMesh = new THREE.Mesh(slicePlane, material);
-//   sliceMesh.position.set(0, 0, z);
-//   sliceScene.add(sliceMesh);
-//   let sliceCamera = new THREE.OrthographicCamera(
-//     uniforms.u_ll.value.x, uniforms.u_ur.value.x,
-//     uniforms.u_ur.value.y, uniforms.u_ll.value.y, 0.1, 1000);
+let sliceScene = null;
+const rtWidth = 512;
+const rtHeight = 512;
+const sliceRenderTarget = new THREE.WebGLRenderTarget(rtWidth, rtHeight);
+let pixelBuffer = null;
+function getPixelBuffer() { return pixelBuffer; }
+function renderSliceToTexture(z) {
+  console.log("Rendering slice at z=", z);
+  if (sliceScene != null) {
+    sliceScene.dispose();
+  }
+  sliceScene = new THREE.Scene();
+  const width = uniforms.u_ur.value.x - uniforms.u_ll.value.x;
+  const height = uniforms.u_ur.value.y - uniforms.u_ll.value.y;
+  let myUniforms = copyUniforms();
+  myUniforms.u_d.value = 1.0;
+  let material = new THREE.ShaderMaterial({ uniforms: myUniforms, vertexShader: vs, fragmentShader: fsHeader + compilerSource, side: THREE.DoubleSide, transparent: false });
+  let slicePlane = new THREE.PlaneBufferGeometry(width, height);
+  let sliceMesh = new THREE.Mesh(slicePlane, material);
+  sliceMesh.position.set(0, 0, z);
+  sliceScene.add(sliceMesh);
+  let sliceCamera = new THREE.OrthographicCamera(
+    uniforms.u_ll.value.x, uniforms.u_ur.value.x,
+    uniforms.u_ur.value.y, uniforms.u_ll.value.y, 0.1, 1000);
 
-//   renderer.setRenderTarget(sliceRenderTarget);
-//   renderer.render(sliceScene, sliceCamera);
+  renderer.setRenderTarget(sliceRenderTarget);
+  renderer.render(sliceScene, sliceCamera);
 
-//   pixelBuffer = new Uint8Array(4 * rtWidth * rtHeight);
-//   renderer.readRenderTargetPixels(sliceRenderTarget, 0, 0, rtWidth, rtHeight, pixelBuffer);
+  pixelBuffer = new Uint8Array(4 * rtWidth * rtHeight);
+  renderer.readRenderTargetPixels(sliceRenderTarget, 0, 0, rtWidth, rtHeight, pixelBuffer);
 
-//   renderer.setRenderTarget(null);
-// }
+  renderer.setRenderTarget(null);
+}
