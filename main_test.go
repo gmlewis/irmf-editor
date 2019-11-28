@@ -107,7 +107,7 @@ func TestGenColorMixer(t *testing.T) {
 			hsvs:           hsvMap{"PLA": &hsvT{H: 3, S: 5, V: 2}},
 			hsls:           hslMap{"metal": &hslT{H: 1, S: 4, L: 7}},
 			rgbs:           rgbMap{"dielectric": &rgbT{R: 8, G: 6, B: 9}},
-			wantColorMixer: "u_d*(hsv(m[0][2],m[1][1],m[0][1]) + hsl(m[0][0],m[1][0],m[2][0]) + vec4(m[2][1],m[1][2],m[2][2],1.0))",
+			wantColorMixer: "u_d*(hsv(m[0][2],m[1][1],m[0][1]) + hsl(m[0][0],m[1][0],m[2][0]) + vec4(m[2][1],m[1][2],m[2][2],max(m[2][1],max(m[1][2],m[2][2]))))",
 		},
 		{
 			name:           "One HSV triplet with an extra material",
@@ -119,7 +119,7 @@ func TestGenColorMixer(t *testing.T) {
 		{
 			name:           "One RGB triplet",
 			materialNames:  []string{"PLA.R", "PLA.G", "PLA.B"},
-			wantColorMixer: "u_d*(vec4(m.x,m.y,m.z,1.0))",
+			wantColorMixer: "u_d*(vec4(m.x,m.y,m.z,max(m.x,max(m.y,m.z))))",
 			rgbs:           rgbMap{"PLA": &rgbT{R: 1, G: 2, B: 3}},
 		},
 	}
