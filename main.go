@@ -488,7 +488,7 @@ func updateJSONOptions(jsonBlob *irmf) {
 func loadSource() []byte {
 	const oldPrefix = "/?s=github.com/"
 	const newPrefix = "https://raw.githubusercontent.com/"
-	url := js.Global().Get("document").Get("location").String()
+	url := js.Global().Get("document").Get("location").Get("href").String()
 	i := strings.Index(url, oldPrefix)
 	if i < 0 {
 		logf("No source requested in URL path.")
