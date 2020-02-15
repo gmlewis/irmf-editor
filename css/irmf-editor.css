@@ -1,0 +1,62 @@
+.split,
+.gutter.gutter-horizontal {
+  float: left;
+}
+
+.gutter.gutter-horizontal {
+  cursor: ew-resize;
+}
+
+.split {
+  -webkit-box-sizing: border-box;
+  -moz-box-sizing: border-box;
+  box-sizing: border-box;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.gutter {
+  background-color: green;
+  width: 10px;
+}
+
+.split.split-horizontal,
+.gutter.gutter-horizontal {
+  height: 100%;
+  float: left;
+}
+
+html,
+body {
+  height: 100%;
+  background: #000;
+  margin: 0;
+}
+
+.full-height {
+  height: 100%;
+}
+
+#canvas {
+  display: block;
+}
+
+.glyphMarginErrorClass {
+  background: red;
+}
+
+.contentErrorClass {
+  background: red;
+}
+
+#slice-button {
+  position: absolute;
+  right: 20px;
+  top: 10px;
+}
+
+#gui {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+}
