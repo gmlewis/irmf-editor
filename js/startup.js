@@ -2,7 +2,6 @@
 /* global THREE */
 
 // Split panels...
-
 Split(['#one', '#two']);
 const twoDiv = document.getElementById('two');
 
@@ -151,7 +150,7 @@ function rangeChanged(name, index) {
 
 // Set up Monaco editor...
 
-require.config({ paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.17.1/min/vs' } });
+require.config({ paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.20.0/min/vs' } });
 
 // Before loading vs/editor/editor.main, define a global MonacoEnvironment that overwrites
 // the default worker url location (used when creating WebWorkers). The problem here is that
@@ -161,9 +160,9 @@ window.MonacoEnvironment = {
   getWorkerUrl: function (workerId, label) {
     return `data:text/javascript;charset=utf-8,${encodeURIComponent(`
     self.MonacoEnvironment = {
-      baseUrl: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.17.1/min/'
+      baseUrl: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.20.0/min/'
     };
-    importScripts('https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.17.1/min/vs/base/worker/workerMain.js');`
+    importScripts('https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.20.0/min/vs/base/worker/workerMain.js');`
     )}`;
   }
 };
@@ -210,20 +209,26 @@ function highlightShaderError(line, column) {
     }
   ]);
 }
+
 function getEditor() { return editor; }
+
 require(["vs/editor/editor.main"], function () {
   monaco.editor.defineTheme('myCustomTheme', {
     base: 'vs-dark', // can also be vs or hc-black
     inherit: true, // can also be false to completely replace the builtin rules
     rules: [
-      { token: 'comment', foreground: 'ffa500', fontStyle: 'italic underline' },
-      { token: 'comment.js', foreground: '008800', fontStyle: 'bold' },
+      { token: 'comment.js', foreground: 'ffa500', fontStyle: 'italic underline' },
+      { token: 'comment', foreground: '008800', fontStyle: 'bold' },
       { token: 'comment.css', foreground: '0000ff' } // will inherit fontStyle from `comment` above
     ]
   });
+  // Register a new language
+  monaco.languages.register({ id: 'glsl' });
+  // Register a tokens provider for the language
+  monaco.languages.setMonarchTokensProvider('glsl', glsl);
   editor = monaco.editor.create(document.getElementById('one'), {
     value: '',
-    language: 'javascript',
+    language: 'glsl',
     scrollBeyondLastLine: false,
     theme: "myCustomTheme",
     minimap: {
@@ -239,7 +244,6 @@ require(["vs/editor/editor.main"], function () {
   // because it's not actually saving the shader anywhere... just compiling it.
   editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KEY_S, compileShader);
 
-  console.log('editor started');
   function twoDivResized() {
     canvas.width = twoDiv.offsetWidth;
     canvas.height = twoDiv.offsetHeight - 100; // Keep in sync with 'logf' div height.

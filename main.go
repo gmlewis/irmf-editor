@@ -549,9 +549,9 @@ float sphere(in vec3 pos, in float radius, in vec3 xyz) {
   return r <= radius ? 1.0 : 0.0;
 }
 
-void mainModel4( out vec4 materials, in vec3 xyz ) {
+void mainModel4(out vec4 materials, in vec3 xyz ) {
   const float radius = 6.0;
-  materials[0] = 1.0 - sphere(vec3(0), radius, xyz);
+  materials[0] = 1.0 - sphere(vec3(0), radius, xyz);  // 1.0 represents the cube.
 }
 `
 
