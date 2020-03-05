@@ -166,8 +166,8 @@ func initShader(src []byte) interface{} {
 		rangeValues.Set("maxz", jsonBlob.Max[2])
 	}
 
-	// logf("Compiling new model shader:\n%v", shaderSrc)
-	js.Global().Call("loadNewModel", shaderSrc+fsFooter(jsonBlob.Materials))
+	// logf("Compiling new model shader:\n%v", newShader)
+	js.Global().Call("loadNewModel", newShader+fsFooter(jsonBlob.Materials))
 
 	return nil
 }

@@ -208,6 +208,7 @@ function highlightShaderError(line, column) {
       }
     }
   ]);
+  editor.revealLineInCenter(line);
 }
 
 function getEditor() { return editor; }
@@ -790,13 +791,15 @@ function checkCompilerErrors() {
       continue
     }
     if (program.diagnostics.fragmentShader.log) {
+      let headerLines = fsHeader.split(/\r\n|\r|\n/).length;
+      let prefixLines = program.diagnostics.fragmentShader.prefix.split(/\r\n|\r|\n/).length;
       let log = program.diagnostics.fragmentShader.log;
       let logfDiv = document.getElementById('logf');
       let match = errorRE.exec(log);
       if (match) {
         // highlight the error location.
         let column = match[1];
-        let line = match[2] - 131;  // Note - hard-coded based on current source.
+        let line = match[2] - prefixLines - headerLines + 3;
         highlightShaderError(line, column);
         log = 'ERROR: ' + (parseInt(column, 10) + 1).toString() + ':' + line.toString() + ':' + log.substr(match[0].length);
       }
