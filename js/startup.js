@@ -796,7 +796,7 @@ function checkCompilerErrors() {
       if (match) {
         // highlight the error location.
         let column = match[1];
-        let line = match[2] - 127;  // Note - hard-coded based on current source.
+        let line = match[2] - 131;  // Note - hard-coded based on current source.
         highlightShaderError(line, column);
         log = 'ERROR: ' + (parseInt(column, 10) + 1).toString() + ':' + line.toString() + ':' + log.substr(match[0].length);
       }
