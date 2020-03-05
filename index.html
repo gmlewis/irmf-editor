@@ -9,8 +9,8 @@
 
 <body>
   <div class="full-height">
-    <div class="split full-height" id="one" style="border:1px solid grey"></div>
-    <div class="split full-height" id="two" style="border:1px solid grey;overflow:hidden">
+    <div class="split full-height" id="one" style="border:1px solid grey; overflow:hidden"></div>
+    <div class="split full-height" id="two" style="border:1px solid grey; overflow:hidden">
       <canvas id="canvas" width="640" height="480"></canvas>
       <button id='slice-button' onclick="goSliceCallback()" style="display:none">Slice it!</button>
       <div id="logf" style="height:100px;color:white">
@@ -20,26 +20,27 @@
     </div>
   </div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/split.js/1.5.11/split.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/106/three.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.7.6/dat.gui.min.js"></script>
-<script src="js/trackball-controls.js"></script>
-<script src="js/glsl-lang.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.20.0/min/vs/loader.js"></script>
-<script src="js/startup.js"></script>
-<script src="js/wasm_exec.js"></script>
-<script>
-  if (!WebAssembly.instantiateStreaming) { // polyfill
-    WebAssembly.instantiateStreaming = async (resp, importObject) => {
-      const source = await (await resp).arrayBuffer();
-      return await WebAssembly.instantiate(source, importObject);
-    };
-  }
-  const go = new Go();
-  WebAssembly.instantiateStreaming(fetch("main.wasm"), go.importObject).then((result) => {
-    go.run(result.instance);
-  });
-</script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/split.js/1.5.11/split.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/110/three.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.7.6/dat.gui.min.js"></script>
+  <script src="js/trackball-controls.js"></script>
+  <script src="js/glsl-lang.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.20.0/min/vs/loader.js"></script>
+  <script src="js/startup.js"></script>
+  <script src="js/wasm_exec.js"></script>
+  <script>
+    if (!WebAssembly.instantiateStreaming) { // polyfill
+      WebAssembly.instantiateStreaming = async (resp, importObject) => {
+        const source = await (await resp).arrayBuffer();
+        return await WebAssembly.instantiate(source, importObject);
+      };
+    }
+    const go = new Go();
+    WebAssembly.instantiateStreaming(fetch("main.wasm"), go.importObject).then((result) => {
+      go.run(result.instance);
+    });
+  </script>
 
 </body>
+
 </html>
