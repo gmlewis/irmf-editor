@@ -226,6 +226,33 @@ require(["vs/editor/editor.main"], function () {
   monaco.languages.register({ id: 'glsl' });
   // Register a tokens provider for the language
   monaco.languages.setMonarchTokensProvider('glsl', glsl);
+  monaco.languages.setLanguageConfiguration('glsl', {
+    comments: {
+      lineComment: '//',
+      blockComment: ['/*', '*/'],
+    },
+    brackets: [
+      ['{', '}'],
+      ['[', ']'],
+      ['(', ')']
+    ],
+    autoClosingPairs: [
+      { open: '{', close: '}' },
+      { open: '[', close: ']' },
+      { open: '(', close: ')' },
+      { open: '`', close: '`', notIn: ['string'] },
+      { open: '"', close: '"', notIn: ['string'] },
+      { open: '\'', close: '\'', notIn: ['string', 'comment'] },
+    ],
+    surroundingPairs: [
+      { open: '{', close: '}' },
+      { open: '[', close: ']' },
+      { open: '(', close: ')' },
+      { open: '`', close: '`' },
+      { open: '"', close: '"' },
+      { open: '\'', close: '\'' },
+    ]
+  });
   editor = monaco.editor.create(document.getElementById('one'), {
     value: '',
     language: 'glsl',
@@ -759,7 +786,7 @@ function checkCompilerErrors() {
     if (program.name !== 'ShaderMaterial' || !program.diagnostics) {
       continue;
     }
-    if (program.code.substr(0, currentCode.length) !== currentCode) {
+    if (program.cacheKey.substr(0, currentCode.length) !== currentCode) {
       continue
     }
     if (program.diagnostics.fragmentShader.log) {
