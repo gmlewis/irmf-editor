@@ -560,7 +560,7 @@
 
 	if (
 		global.require &&
-		global.require.main === module &&
+		false &&
 		global.process &&
 		global.process.versions &&
 		!global.process.versions.electron
