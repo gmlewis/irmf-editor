@@ -1,3 +1,5 @@
+// irmf-editor is the main Go program that is compiled to WebAssembly
+// that powers the client-side processing for the IRMF editor.
 package main
 
 import (
@@ -485,16 +487,33 @@ func updateJSONOptions(jsonBlob *irmf) {
 	}
 }
 
+const (
+	githubSourcePrefix = "/?s=github.com/"
+	lbrySourcePrefix   = "/?s=lbry://"
+)
+
 func loadSource() []byte {
-	const oldPrefix = "/?s=github.com/"
-	const newPrefix = "https://raw.githubusercontent.com/"
 	url := js.Global().Get("document").Get("location").Get("href").String()
-	i := strings.Index(url, oldPrefix)
-	if i < 0 {
-		logf("No source requested in URL path.")
+
+	switch {
+	case strings.Contains(url, githubSourcePrefix):
+		return loadGitHubSource(url)
+	case strings.Contains(url, lbrySourcePrefix):
+		return loadLbrySource(url)
+	default:
+		logf("No recognized source requested in URL path.")
 		return nil
 	}
-	location := url[i+len(oldPrefix):]
+}
+
+func loadGitHubSource(url string) []byte {
+	const newPrefix = "https://raw.githubusercontent.com/"
+	i := strings.Index(url, githubSourcePrefix)
+	if i < 0 {
+		logf("No recognized source requested in URL path.")
+		return nil
+	}
+	location := url[i+len(githubSourcePrefix):]
 	lower := strings.ToLower(location)
 	if !strings.HasSuffix(lower, ".irmf") {
 		js.Global().Call("alert", "irmf-editor will only load .irmf files")
