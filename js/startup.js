@@ -381,9 +381,15 @@ function copyUniforms() {
 let modelCentroidNull = null;
 let compilerSource = '';
 function loadNewModel(source) {
-  console.log("Compiling new model.");
+  console.log('Compiling new model.');
+  let firstRun = (compilerSource == '');
   compilerSource = source;
   uniformsChanged();
+  let lookAt = getLookAt();
+  controls.target0 = new THREE.Vector3(lookAt[0], lookAt[1], lookAt[2]);
+  if (firstRun) {
+    viewCallbacks[6]();  // Reset to default view.
+  }
   render();
 }
 
@@ -408,23 +414,32 @@ function rangeValuesChanged() {
   const urz = rangeValues.urz;
   uniforms.u_ll.value.set(llx, lly, llz);
   uniforms.u_ur.value.set(urx, ury, urz);
-  let maxval = (urx > ury) ? ury : ury;
-  maxval = (maxval > urz) ? maxval : urz;
+  let maxval = ((urx - llx) > (ury - lly)) ? (urx - llx) : (ury - lly);
+  maxval = (maxval > (urz - llz)) ? maxval : (urz - llz);
   resetCameraD = maxval;
+  // console.log('rangeValuesChanged: resetCameraD=' + resetCameraD.toString());
 
   const ll = new THREE.Vector3(llx, lly, llz);
   const ur = new THREE.Vector3(urx, ury, urz);
-  const minD = -ll.length();
-  const maxD = ur.length();
+  const lookAt = getLookAt();
+  const center = new THREE.Vector3(lookAt[0], lookAt[1], lookAt[2]);
+  const minD = -(new THREE.Vector3().subVectors(center, ll)).length();
+  const maxD = (new THREE.Vector3().subVectors(ur, center)).length();
   let diagonal = maxD - minD;
   if (diagonal <= 0.0) {
     diagonal = 1.0;  // Avoid divide-by-zero.
   }
+  // console.log('rangeValuesChanged: minD=' + minD.toString() + ', maxD=' + maxD.toString() + ', diagonal=' + diagonal.toString());
 
   scene.dispose();  // This alone is not enough. Need to create a brand new scene.
   scene = new THREE.Scene();  // Eventually add a light?
 
   modelCentroidNull = new THREE.Object3D()
+  modelCentroidNull.translateX(lookAt[0]);
+  modelCentroidNull.translateY(lookAt[1]);
+  modelCentroidNull.translateZ(lookAt[2]);
+  // console.log('rangeValuesChanged: modelCentroidNull.position=', modelCentroidNull.position);
+
   scene.add(modelCentroidNull);
   // modelCentroidNull.add(new THREE.AxesHelper(diagonal));  // for debugging
   // TODO: make this a GUI option?
@@ -434,6 +449,7 @@ function rangeValuesChanged() {
   for (let d = minD + dStep; d < maxD; d += dStep) {
     let myUniforms = copyUniforms();
     myUniforms.u_d.value = (d - minD) / (maxD - dStep - minD);
+    // console.log('d=' + d.toString() + ', u_d=' + myUniforms.u_d.value.toString());
     let material = new THREE.ShaderMaterial({ uniforms: myUniforms, vertexShader: vs, fragmentShader: fsHeader + compilerSource, side: THREE.DoubleSide, transparent: true });
     let plane = new THREE.PlaneBufferGeometry(diagonal, diagonal);  // Should this always fill the viewport?
     let mesh = new THREE.Mesh(plane, material);
@@ -462,20 +478,20 @@ const viewRotations = [[0, halfPi, 0], [0, -halfPi, 0], [-halfPi, 0, 0], [halfPi
 [quarterPi, 0, quarterPi, 'ZYX'], [-quarterPi, 0, -quarterPi, 'ZYX'], [-quarterPi, 0, quarterPi, 'ZYX'], [quarterPi, 0, -quarterPi, 'ZYX'],
 [-quarterPi, 0, quarterPi, 'ZYX'], [quarterPi, 0, -quarterPi, 'ZYX'], [quarterPi, 0, quarterPi, 'ZYX'], [-quarterPi, 0, -quarterPi, 'ZYX']];
 const viewCallbacks = [
-  function () { toOrtho(rightView); controls.position0.set(resetCameraD, 0, 0); controls.up0.set(0, 0, 1); controls.reset(); },  // right
-  function () { toOrtho(leftView); controls.position0.set(-resetCameraD, 0, 0); controls.up0.set(0, 0, 1); controls.reset(); },  // left
-  function () { toOrtho(backView); controls.position0.set(0, resetCameraD, 0); controls.up0.set(0, 0, 1); controls.reset(); },  // back
-  function () { toOrtho(frontView); controls.position0.set(0, -resetCameraD, 0); controls.up0.set(0, 0, 1); controls.reset(); },  // front
-  function () { toOrtho(topView); controls.position0.set(0, 0, resetCameraD); controls.up0.set(0, 1, 0); controls.reset(); },  // top
-  function () { toOrtho(bottomView); controls.position0.set(0, 0, -resetCameraD); controls.up0.set(0, -1, 0); controls.reset(); }, // bottom
-  function () { toPersp(); controls.position0.set(resetCameraD, -resetCameraD, resetCameraD); controls.up0.set(0, 0, 1); controls.reset(); },
-  function () { toPersp(); controls.position0.set(resetCameraD, resetCameraD, resetCameraD); controls.up0.set(0, 0, 1); controls.reset(); },
-  function () { toPersp(); controls.position0.set(-resetCameraD, resetCameraD, resetCameraD); controls.up0.set(0, 0, 1); controls.reset(); },
-  function () { toPersp(); controls.position0.set(-resetCameraD, -resetCameraD, resetCameraD); controls.up0.set(0, 0, 1); controls.reset(); },
-  function () { toPersp(); controls.position0.set(resetCameraD, -resetCameraD, -resetCameraD); controls.up0.set(0, 0, 1); controls.reset(); },
-  function () { toPersp(); controls.position0.set(resetCameraD, resetCameraD, -resetCameraD); controls.up0.set(0, 0, 1); controls.reset(); },
-  function () { toPersp(); controls.position0.set(-resetCameraD, resetCameraD, -resetCameraD); controls.up0.set(0, 0, 1); controls.reset(); },
-  function () { toPersp(); controls.position0.set(-resetCameraD, -resetCameraD, -resetCameraD); controls.up0.set(0, 0, 1); controls.reset(); }
+  function () { toOrtho(rightView); let p = getLookAt(); controls.position0.set(p[0] + resetCameraD, p[1] + 0, p[2] + 0); controls.up0.set(0, 0, 1); controls.reset(); },  // right
+  function () { toOrtho(leftView); let p = getLookAt(); controls.position0.set(p[0] + -resetCameraD, p[1] + 0, p[2] + 0); controls.up0.set(0, 0, 1); controls.reset(); },  // left
+  function () { toOrtho(backView); let p = getLookAt(); controls.position0.set(p[0] + 0, p[1] + resetCameraD, p[2] + 0); controls.up0.set(0, 0, 1); controls.reset(); },  // back
+  function () { toOrtho(frontView); let p = getLookAt(); controls.position0.set(p[0] + 0, p[1] + -resetCameraD, p[2] + 0); controls.up0.set(0, 0, 1); controls.reset(); },  // front
+  function () { toOrtho(topView); let p = getLookAt(); controls.position0.set(p[0] + 0, p[1] + 0, p[2] + resetCameraD); controls.up0.set(0, 1, 0); controls.reset(); },  // top
+  function () { toOrtho(bottomView); let p = getLookAt(); controls.position0.set(p[0] + 0, p[1] + 0, p[2] + -resetCameraD); controls.up0.set(0, -1, 0); controls.reset(); }, // bottom
+  function () { toPersp(); let p = getLookAt(); controls.position0.set(p[0] + resetCameraD, p[1] + -resetCameraD, p[2] + resetCameraD); controls.up0.set(0, 0, 1); controls.reset(); },
+  function () { toPersp(); let p = getLookAt(); controls.position0.set(p[0] + resetCameraD, p[1] + resetCameraD, p[2] + resetCameraD); controls.up0.set(0, 0, 1); controls.reset(); },
+  function () { toPersp(); let p = getLookAt(); controls.position0.set(p[0] + -resetCameraD, p[1] + resetCameraD, p[2] + resetCameraD); controls.up0.set(0, 0, 1); controls.reset(); },
+  function () { toPersp(); let p = getLookAt(); controls.position0.set(p[0] + -resetCameraD, p[1] + -resetCameraD, p[2] + resetCameraD); controls.up0.set(0, 0, 1); controls.reset(); },
+  function () { toPersp(); let p = getLookAt(); controls.position0.set(p[0] + resetCameraD, p[1] + -resetCameraD, p[2] + -resetCameraD); controls.up0.set(0, 0, 1); controls.reset(); },
+  function () { toPersp(); let p = getLookAt(); controls.position0.set(p[0] + resetCameraD, p[1] + resetCameraD, p[2] + -resetCameraD); controls.up0.set(0, 0, 1); controls.reset(); },
+  function () { toPersp(); let p = getLookAt(); controls.position0.set(p[0] + -resetCameraD, p[1] + resetCameraD, p[2] + -resetCameraD); controls.up0.set(0, 0, 1); controls.reset(); },
+  function () { toPersp(); let p = getLookAt(); controls.position0.set(p[0] + -resetCameraD, p[1] + -resetCameraD, p[2] + -resetCameraD); controls.up0.set(0, 0, 1); controls.reset(); }
 ];
 
 function commonViewCalc(left, right, top, bottom) {
@@ -489,7 +505,7 @@ function commonViewCalc(left, right, top, bottom) {
     frustumSize = fs * width / aspectRatio;
     resetCameraD = 0.5 * width;
   }
-  // console.log('aspectRatio=' + aspectRatio.toString() + ', width=' + width.toString() + ', height=' + height.toString() + ', frustumSize=' + frustumSize.toString() + ', resetCameraD=' + resetCameraD.toString());
+  console.log('commonViewCalc: aspectRatio=' + aspectRatio.toString() + ', width=' + width.toString() + ', height=' + height.toString() + ', frustumSize=' + frustumSize.toString() + ', resetCameraD=' + resetCameraD.toString());
   return {
     left: -aspectRatio * frustumSize,
     right: aspectRatio * frustumSize,

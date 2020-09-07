@@ -538,20 +538,19 @@ func logf(fmtStr string, args ...interface{}) {
 const startupShader = `/*{
   irmf: "1.0",
   materials: ["PLA"],
-  max: [5,5,5],
-  min: [-5,-5,-5],
+  max: [10,10,10],
+  min: [0,0,0],
   units: "mm",
 }*/
 
-float sphere(in vec3 pos, in float radius, in vec3 xyz) {
-  xyz -= pos;  // Move sphere into place.
+float sphere(in float radius, in vec3 xyz) {
   float r = length(xyz);
   return r <= radius ? 1.0 : 0.0;
 }
 
 void mainModel4(out vec4 materials, in vec3 xyz ) {
   const float radius = 6.0;
-  materials[0] = 1.0 - sphere(vec3(0), radius, xyz);  // 1.0 represents the cube.
+  materials[0] = 1.0 - sphere(radius, xyz-vec3(5));  // 1.0 represents the cube.
 }
 `
 
