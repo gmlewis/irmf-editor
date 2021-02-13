@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/lbryio/reflector.go/wallet"
+	"github.com/irmf/reflector.go/wallet"
 )
 
 var (
