@@ -23,7 +23,7 @@ var (
 		{"spv19.lbry.com", 50001},
 	}
 	// Known nodes for bootstrapping connection to the DHT
-	knownDHTNodes = []lbryServers{
+	knownDHTNodes = []lbryServer{
 		{"lbrynet1.lbry.com", 4444}, // US EAST
 		{"lbrynet2.lbry.com", 4444}, // US WEST
 		{"lbrynet3.lbry.com", 4444}, // EU
@@ -65,6 +65,7 @@ func loadLbrySource(url string) []byte {
 	}
 
 	fmt.Printf("%s\n", jsonClaim)
+	return nil
 }
 
 func rev(b []byte) []byte {

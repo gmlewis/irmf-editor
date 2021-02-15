@@ -2,6 +2,8 @@ module github.com/gmlewis/irmf-editor
 
 go 1.15
 
+replace github.com/btcsuite/btcd => github.com/lbryio/lbrycrd.go v0.0.0-20200203050410-e1076f12bf19
+
 require (
 	github.com/armon/go-metrics v0.3.6 // indirect
 	github.com/aws/aws-sdk-go v1.37.10 // indirect
