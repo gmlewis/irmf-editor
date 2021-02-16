@@ -11,40 +11,33 @@ import (
 
 var (
 	// SPV wallet servers
-	lbryumServers = []lbryServer{
-		{"spv11.lbry.com", 50001},
-		{"spv12.lbry.com", 50001},
-		{"spv13.lbry.com", 50001},
-		{"spv14.lbry.com", 50001},
-		{"spv15.lbry.com", 50001},
-		{"spv16.lbry.com", 50001},
-		{"spv17.lbry.com", 50001},
-		{"spv18.lbry.com", 50001},
-		{"spv19.lbry.com", 50001},
+	lbryServers = []string{
+		"spv11.lbry.com:50001",
+		"spv12.lbry.com:50001",
+		"spv13.lbry.com:50001",
+		"spv14.lbry.com:50001",
+		"spv15.lbry.com:50001",
+		"spv16.lbry.com:50001",
+		"spv17.lbry.com:50001",
+		"spv18.lbry.com:50001",
+		"spv19.lbry.com:50001",
 	}
 	// Known nodes for bootstrapping connection to the DHT
-	knownDHTNodes = []lbryServer{
-		{"lbrynet1.lbry.com", 4444}, // US EAST
-		{"lbrynet2.lbry.com", 4444}, // US WEST
-		{"lbrynet3.lbry.com", 4444}, // EU
-		{"lbrynet4.lbry.com", 4444}, // ASIA
+	knownDHTNodes = []string{
+		"lbrynet1.lbry.com:4444", // US EAST
+		"lbrynet2.lbry.com:4444", // US WEST
+		"lbrynet3.lbry.com:4444", // EU
+		"lbrynet4.lbry.com:4444", // ASIA
 	}
 )
 
-type lbryServer struct {
-	host string
-	port int
-}
-
 func loadLbrySource(url string) []byte {
-	addr := fmt.Sprintf("%v:%v", lbryumServers[0]) // experiment
-
 	node := wallet.NewNode()
-	defer node.Shutdown()
-	if err := node.Connect([]string{addr}, nil); err != nil {
-		log.Printf("node.Connect(%q): %v", addr, err)
+	if err := node.Connect(lbryServers, nil); err != nil {
+		log.Printf("node.Connect: %v", err)
 		return nil
 	}
+	defer node.Shutdown()
 
 	output, err := node.Resolve(url)
 	if err != nil {
