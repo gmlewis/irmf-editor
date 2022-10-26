@@ -78,7 +78,9 @@ func main() {
 	logf("Application irmf-editor is now started")
 
 	// prevent program from terminating
-	select {}
+	// deadlock: select {}
+	c := make(chan struct{}, 0)
+	<-c
 }
 
 func compileShader(this js.Value, args []js.Value) interface{} {
