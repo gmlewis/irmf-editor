@@ -608,8 +608,6 @@ const startupShader = `/*{
   units: "mm",
 }*/
 
-#include "lygia/math/decimation.glsl"
-
 float sphere(in float radius, in vec3 xyz) {
   float r = length(xyz);
   return r <= radius ? 1.0 : 0.0;

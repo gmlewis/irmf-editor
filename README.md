@@ -22,10 +22,27 @@ slicers](https://en.wikipedia.org/wiki/Slicer_(3D_printing)),
 [G-code](https://en.wikipedia.org/wiki/G-code) files used in
 [3D printers](https://en.wikipedia.org/wiki/3D_printing).
 
-I believe that IRMF shaders will revolutionize the 3D-printing industry.
+I believe that IRMF shaders will some day revolutionize the 3D-printing industry.
 
 See [github.com/gmlewis/irmf](https://github.com/gmlewis/irmf) for more
 details.
+
+## LYGIA support
+
+As of 2022-10-26, support has been added for using the LYGIA Shader Library
+at: https://lygia.xyz !
+
+This means that you can add lines to your IRMF shaders like this:
+
+```glsl
+#include "lygia/math/decimation.glsl"
+```
+
+and the source will be retrieved (and cached) from the LYGIA server.
+
+Congratulations and thanks go to [Patricio Gonzalez Vivo](https://github.com/sponsors/patriciogonzalezvivo)
+for making the LYGIA server available for anyone to use, and also
+for the amazing tool [glslViewer](https://github.com/patriciogonzalezvivo/glslViewer)!
 
 ## IRMF Shader Editor Status
 
