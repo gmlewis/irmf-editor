@@ -77,10 +77,17 @@ func main() {
 
 	logf("Application irmf-editor is now started")
 
+	// This is a hack, but for some reason, the Go runtime must make
+	// a single roundtrip call before calling select to prevent later
+	// roundtrips from causing deadlock!
+	if buf, err := curl("https://lygia.xyz/math/decimation.glsl"); err != nil {
+		logf("request to lygia failed: %v", err)
+	} else {
+		logf("successfully retrieved %v bytes from lygia", len(buf))
+	}
+
 	// prevent program from terminating
-	// deadlock: select {}
-	c := make(chan struct{}, 0)
-	<-c
+	select {}
 }
 
 func compileShader(this js.Value, args []js.Value) interface{} {
