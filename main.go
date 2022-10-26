@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	"math"
 	"net/http"
+	"regexp"
 	"strings"
 	"syscall/js"
 	"time"
@@ -50,13 +51,13 @@ func main() {
 	cb := js.FuncOf(compileShader)
 	v := js.Global().Get("installCompileShader")
 	if v.Type() == js.TypeFunction {
-		logf("Installing compileShader callback")
+		// logf("Installing compileShader callback")
 		v.Invoke(cb)
 	}
 	cb = js.FuncOf(updateJSONOptionsCallback)
 	v = js.Global().Get("installUpdateJSONOptionsCallback")
 	if v.Type() == js.TypeFunction {
-		logf("Installing updateJSONOptions callback")
+		// logf("Installing updateJSONOptions callback")
 		v.Invoke(cb)
 	}
 
@@ -77,8 +78,7 @@ func main() {
 	logf("Application irmf-editor is now started")
 
 	// prevent program from terminating
-	c := make(chan struct{}, 0)
-	<-c
+	select {}
 }
 
 func compileShader(this js.Value, args []js.Value) interface{} {
@@ -165,6 +165,8 @@ func initShader(src []byte) interface{} {
 		rangeValues.Set("urz", jsonBlob.Max[2])
 		rangeValues.Set("maxz", jsonBlob.Max[2])
 	}
+
+	newShader = processIncludes(newShader)
 
 	// logf("Compiling new model shader:\n%v", newShader)
 	js.Global().Call("loadNewModel", newShader+fsFooter(jsonBlob.Materials))
@@ -502,21 +504,84 @@ func loadSource() []byte {
 	}
 
 	location = newPrefix + strings.Replace(location, "/blob/", "/", 1)
-
-	resp, err := http.Get(location)
-	if err != nil {
-		logf("Unable to download source from: %v", location)
-		js.Global().Call("alert", "unable to load IRMF shader")
-		return nil
-	}
-	buf, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		logf("Unable to ready response body.")
-		return nil
-	}
-	resp.Body.Close()
-	logf("Read %v bytes from GitHub.", len(buf))
+	buf, _ := curl(location)
 	return buf
+}
+
+var curlCache = map[string][]byte{}
+
+func curl(url string) ([]byte, error) {
+	buf, ok := curlCache[url]
+	if ok {
+		return buf, nil
+	}
+
+	resp, err := http.Get(url)
+	if err != nil {
+		logf("Unable to download source from: %v", url)
+		js.Global().Call("alert", "unable to load source from "+url)
+		return nil, nil
+	}
+	defer resp.Body.Close()
+	buf, err = ioutil.ReadAll(resp.Body)
+	if err != nil {
+		logf("Unable to read response body.")
+		return nil, nil
+	}
+	logf("Read %v bytes from %v", len(buf), url)
+
+	curlCache[url] = buf
+	return buf, nil
+}
+
+var (
+	includeRE = regexp.MustCompile(`^#include\s+"([^"]+)"`)
+)
+
+const (
+	lygiaBaseURL = "https://lygia.xyz"
+	prefix1      = "lygia.xyz/"
+	prefix2      = "lygia/"
+)
+
+func parseIncludeURL(trimmed string) string {
+	m := includeRE.FindStringSubmatch(trimmed)
+	if len(m) < 2 {
+		return ""
+	}
+
+	inc := m[1]
+	switch {
+	case strings.HasPrefix(inc, prefix1):
+		return fmt.Sprintf("%v/%v", lygiaBaseURL, inc[len(prefix1):])
+	case strings.HasPrefix(inc, prefix2):
+		return fmt.Sprintf("%v/%v", lygiaBaseURL, inc[len(prefix2):])
+	default:
+		return ""
+	}
+}
+
+// processIncludes converts "#include" lines (with recognized prefixes)
+// into their actual source by retrieving them from the internet.
+// Note that multiline comments ("/*" and "*/") are currently not supported.
+// It is recommended that an ignored "#include" statement should be commented-out
+// with single-line comments ("//...").
+func processIncludes(source string) string {
+	lines := strings.Split(source, "\n")
+	var result []string
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if url := parseIncludeURL(trimmed); url != "" {
+			if buf, err := curl(url); err == nil {
+				result = append(result, string(buf))
+			}
+			continue
+		}
+
+		result = append(result, line)
+	}
+
+	return strings.Join(result, "\n")
 }
 
 func clearLog() {
@@ -542,6 +607,8 @@ const startupShader = `/*{
   min: [0,0,0],
   units: "mm",
 }*/
+
+#include "lygia/math/decimation.glsl"
 
 float sphere(in float radius, in vec3 xyz) {
   float r = length(xyz);

@@ -35,6 +35,8 @@ Microsoft's amazing open-source [Monaco Editor](https://microsoft.github.io/mona
 The technology stack used is Go compiled to WebAssembly using the
 extremely handy tool [go-wasm-cli](https://github.com/mfrachet/go-wasm-cli).
 
+Easy installation: `npm i -g go-wasm-cli`.
+
 The goal is to allow people to easily design their IRMF shaders and
 visualize the models in real time from this [static web app](https://gmlewis.github.io/irmf-editor).
 All processing will be done with WebGL within the client browser.
