@@ -1,21 +1,21 @@
-'use strict';
+'use strict'
 /* global THREE */
 
 // Split panels...
-Split(['#one', '#two']);
-const twoDiv = document.getElementById('two');
+Split(['#one', '#two'])
+const twoDiv = document.getElementById('two')
 
 // Get A WebGL context
 /** @type {HTMLCanvasElement} */
-const canvas = document.getElementById('canvas');
-const gl = canvas.getContext('webgl2');
+const canvas = document.getElementById('canvas')
+const gl = canvas.getContext('webgl2')
 if (!gl) {
-  console.log('Browser does not support WebGL2!');
+  console.log('Browser does not support WebGL2!')
 }
 
 // Set up GUI:
-const gui = new dat.GUI({ name: 'IRMF Editor', autoPlace: true });
-gui.domElement.id = 'gui';
+const gui = new dat.GUI({ name: 'IRMF Editor', autoPlace: true })
+gui.domElement.id = 'gui'
 
 let resolutionParameters = {
   res32: false,
@@ -25,30 +25,30 @@ let resolutionParameters = {
   res512: true,
   res1024: false,
   res2048: false
-};
+}
 
 function setResolution(res) {
-  setChecked('res' + res.toString());
-  uniforms.u_resolution.value = res;
+  setChecked('res' + res.toString())
+  uniforms.u_resolution.value = res
 }
 
-let resolutionFolder = gui.addFolder("Resolution");
-resolutionFolder.add(resolutionParameters, 'res32').name('32').listen().onChange(function () { setResolution(32); goJSONOptionsCallback(); uniformsChanged(); render(); });
-resolutionFolder.add(resolutionParameters, 'res64').name('64').listen().onChange(function () { setResolution(64); goJSONOptionsCallback(); uniformsChanged(); render(); });
-resolutionFolder.add(resolutionParameters, 'res128').name('128').listen().onChange(function () { setResolution(128); goJSONOptionsCallback(); uniformsChanged(); render(); });
-resolutionFolder.add(resolutionParameters, 'res256').name('256').listen().onChange(function () { setResolution(256); goJSONOptionsCallback(); uniformsChanged(); render(); });
-resolutionFolder.add(resolutionParameters, 'res512').name('512').listen().onChange(function () { setResolution(512); goJSONOptionsCallback(); uniformsChanged(); render(); });
-resolutionFolder.add(resolutionParameters, 'res1024').name('1024').listen().onChange(function () { setResolution(1024); goJSONOptionsCallback(); uniformsChanged(); render(); });
-resolutionFolder.add(resolutionParameters, 'res2048').name('2048').listen().onChange(function () { setResolution(2048); goJSONOptionsCallback(); uniformsChanged(); render(); });
+let resolutionFolder = gui.addFolder("Resolution")
+resolutionFolder.add(resolutionParameters, 'res32').name('32').listen().onChange(function () { setResolution(32); goJSONOptionsCallback(); uniformsChanged(); render() })
+resolutionFolder.add(resolutionParameters, 'res64').name('64').listen().onChange(function () { setResolution(64); goJSONOptionsCallback(); uniformsChanged(); render() })
+resolutionFolder.add(resolutionParameters, 'res128').name('128').listen().onChange(function () { setResolution(128); goJSONOptionsCallback(); uniformsChanged(); render() })
+resolutionFolder.add(resolutionParameters, 'res256').name('256').listen().onChange(function () { setResolution(256); goJSONOptionsCallback(); uniformsChanged(); render() })
+resolutionFolder.add(resolutionParameters, 'res512').name('512').listen().onChange(function () { setResolution(512); goJSONOptionsCallback(); uniformsChanged(); render() })
+resolutionFolder.add(resolutionParameters, 'res1024').name('1024').listen().onChange(function () { setResolution(1024); goJSONOptionsCallback(); uniformsChanged(); render() })
+resolutionFolder.add(resolutionParameters, 'res2048').name('2048').listen().onChange(function () { setResolution(2048); goJSONOptionsCallback(); uniformsChanged(); render() })
 function setChecked(prop) {
   for (let param in resolutionParameters) {
-    resolutionParameters[param] = false;
+    resolutionParameters[param] = false
   }
-  resolutionParameters[prop] = true;
+  resolutionParameters[prop] = true
 }
 
-let colorFolder = gui.addFolder('Material colors (1)');
-function getColorFolder() { return colorFolder; }
+let colorFolder = gui.addFolder('Material colors (1)')
+function getColorFolder() { return colorFolder }
 let colorPalette = {
   color1: [255, 0, 0, 1.0],
   color2: [0, 255, 0, 1.0],
@@ -66,33 +66,33 @@ let colorPalette = {
   color14: [128, 64, 128, 1.0],
   color15: [64, 64, 128, 1.0],
   color16: [64, 128, 128, 1.0],
-};
-function getColorPalette() { return colorPalette; }
+}
+function getColorPalette() { return colorPalette }
 let colorControllers = [
-];
+]
 
 function refreshMaterialColorControllers(names) {
   for (let i = 0; i < colorControllers.length; i++) {
-    colorFolder.remove(colorControllers[i]);
+    colorFolder.remove(colorControllers[i])
   }
-  colorControllers = [];
+  colorControllers = []
   for (let i = 1; i <= names.length; i++) {
-    let name = names[i - 1];
-    let colorName = 'color' + i.toString();
-    let uniformName = 'u_color' + i.toString();
+    let name = names[i - 1]
+    let colorName = 'color' + i.toString()
+    let uniformName = 'u_color' + i.toString()
     let ctrl = colorFolder.addColor(colorPalette, colorName).name(name).listen().onChange(function () {
-      let color = colorPalette[colorName];
-      uniforms[uniformName].value.set(color[0] / 255.0, color[1] / 255.0, color[2] / 255.0, color[3]);
-      goJSONOptionsCallback();
-      uniformsChanged();
-      render();
-    });
-    colorControllers.push(ctrl);
+      let color = colorPalette[colorName]
+      uniforms[uniformName].value.set(color[0] / 255.0, color[1] / 255.0, color[2] / 255.0, color[3])
+      goJSONOptionsCallback()
+      uniformsChanged()
+      render()
+    })
+    colorControllers.push(ctrl)
   }
 }
-refreshMaterialColorControllers(['PLA']);
+refreshMaterialColorControllers(['PLA'])
 
-let rangeFolder = gui.addFolder('View Ranges');
+let rangeFolder = gui.addFolder('View Ranges')
 let rangeValues = {
   // These values represent the current settings which get copied to the uniforms:
   llx: 0.0,
@@ -108,13 +108,13 @@ let rangeValues = {
   maxx: 1.0,
   maxy: 1.0,
   maxz: 1.0,
-};
-function getRangeValues() { return rangeValues; }
+}
+function getRangeValues() { return rangeValues }
 let rangeControllers = [
-];
+]
 function refreshRangeControllers() {
   for (let i = 0; i < rangeControllers.length; i++) {
-    rangeFolder.remove(rangeControllers[i]);
+    rangeFolder.remove(rangeControllers[i])
   }
   rangeControllers = [
     rangeFolder.add(rangeValues, 'llx', rangeValues.minx, rangeValues.maxx).listen().onChange(rangeChanged('llx', 0)),
@@ -123,34 +123,34 @@ function refreshRangeControllers() {
     rangeFolder.add(rangeValues, 'urx', rangeValues.minx, rangeValues.maxx).listen().onChange(rangeChanged('urx', 3)),
     rangeFolder.add(rangeValues, 'ury', rangeValues.miny, rangeValues.maxy).listen().onChange(rangeChanged('ury', 4)),
     rangeFolder.add(rangeValues, 'urz', rangeValues.minz, rangeValues.maxz).listen().onChange(rangeChanged('urz', 5)),
-  ];
+  ]
 }
 function rangeChanged(name, index) {
   if (name.substr(0, 2) === 'll') {
-    let other = 'ur' + name.substr(2, 1);
+    let other = 'ur' + name.substr(2, 1)
     return function () {
       if (rangeValues[name] > rangeValues[other]) {
-        rangeValues[other] = rangeValues[name];
-        rangeControllers[index + 3].setValue(rangeValues[other]);
+        rangeValues[other] = rangeValues[name]
+        rangeControllers[index + 3].setValue(rangeValues[other])
       }
-      rangeValuesChanged();
-      render();
+      rangeValuesChanged()
+      render()
     }
   }
-  let other = 'll' + name.substr(2, 1);
+  let other = 'll' + name.substr(2, 1)
   return function () {
     if (rangeValues[name] < rangeValues[other]) {
-      rangeValues[other] = rangeValues[name];
-      rangeControllers[index - 3].setValue(rangeValues[other]);
+      rangeValues[other] = rangeValues[name]
+      rangeControllers[index - 3].setValue(rangeValues[other])
     }
-    rangeValuesChanged();
-    render();
+    rangeValuesChanged()
+    render()
   }
 }
 
 // Set up Monaco editor...
 
-require.config({ paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.20.0/min/vs' } });
+require.config({ paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.20.0/min/vs' } })
 
 // Before loading vs/editor/editor.main, define a global MonacoEnvironment that overwrites
 // the default worker url location (used when creating WebWorkers). The problem here is that
@@ -163,40 +163,78 @@ window.MonacoEnvironment = {
       baseUrl: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.20.0/min/'
     };
     importScripts('https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.20.0/min/vs/base/worker/workerMain.js');`
-    )}`;
+    )}`
   }
-};
-
-let goCompileCallback = null;
-let decorations = [];
-let editor = null;
-let compileShader = function () {
-  if (goCompileCallback == null) {
-    console.log('TODO: Compile shader.');
-  } else {
-    let currentSelection = editor.getSelection();
-    // Clear decorations.
-    decorations = editor.deltaDecorations(decorations, []);
-    goCompileCallback();
-    // Restore cursor:
-    editor.setSelection(currentSelection);
-  }
-};
-function installCompileShader(cb) {
-  goCompileCallback = cb;
 }
+
+// Go code callback installers:
+let goAlreadyCached = null
+function installAlreadyCached(cb) { goAlreadyCached = cb }
+let goSaveToCache = null
+function installSaveToCache(cb) { goSaveToCache = cb }
+let goCompileCallback = null
+function installCompileShader(cb) { goCompileCallback = cb }
+let goJSONOptionsCallback = null
+function installUpdateJSONOptionsCallback(cb) { goJSONOptionsCallback = cb }
+
+const getFile = (url) => {
+  if (goAlreadyCached(url)) { return }
+  const httpRequest = new XMLHttpRequest()
+  httpRequest.open("GET", url, false)
+  httpRequest.send()
+  if (httpRequest.status === 200) {
+    const body = httpRequest.responseText
+    console.log(`got ${body.length} bytes from ${url}... saving to cache`)
+    goSaveToCache(url, body)
+    return body
+  }
+  console.log(`Unable to get code from ${url}`)
+  return ""
+}
+
+const resolveLygia = (lines) => {
+  if (!Array.isArray(lines)) { lines = lines.split(/\r?\n/) }
+
+  lines.forEach((line) => {
+    const trimmed = line.trim()
+    if (!trimmed.startsWith(`#include "`)) { return }
+    const m = trimmed.match(`#include "([^]*)"`)
+    if (!m) { return }
+    const inc = m[1].startsWith('lygia/') ? m[1].substring(6) :
+      m[1].startsWith('lygia.xyz/') ? m[1].substring(10) : ''
+    if (!inc) { return }
+    const url = `https://lygia.xyz/${inc}`
+    getFile(url)
+  })
+}
+
+let decorations = []
+let editor = null
+const compileShader = () => {
+  if (!goAlreadyCached) { console.log('alreadyCached missing'); return }
+  if (!goSaveToCache) { console.log('saveToCache missing'); return }
+  if (!goCompileCallback) { console.log('compileCallback missing'); return }
+
+  let currentSelection = editor.getSelection()
+  // Clear decorations.
+  decorations = editor.deltaDecorations(decorations, [])
+
+  const buf = editor.getValue()
+  resolveLygia(buf)
+
+  goCompileCallback()
+  // Restore cursor:
+  editor.setSelection(currentSelection)
+}
+
 // let goSliceCallback = null;
 // function installSliceShader(cb) {
 //   goSliceCallback = cb;
 // }
-let goJSONOptionsCallback = null;
-function installUpdateJSONOptionsCallback(cb) {
-  goJSONOptionsCallback = cb;
-}
 
 function highlightShaderError(line, column) {
   if (!column) {
-    column = 1;
+    column = 1
   }
   decorations = editor.deltaDecorations([], [
     {
@@ -207,11 +245,11 @@ function highlightShaderError(line, column) {
         glyphMarginClassName: 'glyphMarginErrorClass'
       }
     }
-  ]);
-  editor.revealLineInCenter(line);
+  ])
+  editor.revealLineInCenter(line)
 }
 
-function getEditor() { return editor; }
+function getEditor() { return editor }
 
 require(["vs/editor/editor.main"], function () {
   monaco.editor.defineTheme('myCustomTheme', {
@@ -222,11 +260,11 @@ require(["vs/editor/editor.main"], function () {
       { token: 'comment', foreground: '008800', fontStyle: 'bold' },
       { token: 'comment.css', foreground: '0000ff' } // will inherit fontStyle from `comment` above
     ]
-  });
+  })
   // Register a new language
-  monaco.languages.register({ id: 'glsl' });
+  monaco.languages.register({ id: 'glsl' })
   // Register a tokens provider for the language
-  monaco.languages.setMonarchTokensProvider('glsl', glsl);
+  monaco.languages.setMonarchTokensProvider('glsl', glsl)
   monaco.languages.setLanguageConfiguration('glsl', {
     comments: {
       lineComment: '//',
@@ -253,7 +291,7 @@ require(["vs/editor/editor.main"], function () {
       { open: '"', close: '"' },
       { open: '\'', close: '\'' },
     ]
-  });
+  })
   editor = monaco.editor.create(document.getElementById('one'), {
     value: '',
     language: 'glsl',
@@ -263,25 +301,25 @@ require(["vs/editor/editor.main"], function () {
       enabled: false
     },
     glyphMargin: true
-  });
-  editor.updateOptions({ wordWrap: "on" });
+  })
+  editor.updateOptions({ wordWrap: "on" })
 
   // Add Ctrl/Cmd-Enter to render updated model:
-  editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, compileShader);
+  editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, compileShader)
   // Also support Ctrl/Cmd-s just out of sheer habit, but don't advertize this
   // because it's not actually saving the shader anywhere... just compiling it.
-  editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KEY_S, compileShader);
+  editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KEY_S, compileShader)
 
   function twoDivResized() {
-    canvas.width = twoDiv.offsetWidth;
-    canvas.height = twoDiv.offsetHeight - 100; // Keep in sync with 'logf' div height.
-    gui.domElement.style.left = (twoDiv.offsetLeft + 11).toString() + 'px';
-    gui.domElement.style.display = 'block';  // Why is GUI disappearing when typing in editor?!?
-    editor.layout();
-    onCanvasResize();
+    canvas.width = twoDiv.offsetWidth
+    canvas.height = twoDiv.offsetHeight - 100 // Keep in sync with 'logf' div height.
+    gui.domElement.style.left = (twoDiv.offsetLeft + 11).toString() + 'px'
+    gui.domElement.style.display = 'block'  // Why is GUI disappearing when typing in editor?!?
+    editor.layout()
+    onCanvasResize()
   }
-  new ResizeObserver(twoDivResized).observe(twoDiv);
-});
+  new ResizeObserver(twoDivResized).observe(twoDiv)
+})
 
 // Rendering...
 
@@ -291,7 +329,7 @@ void main() {
   gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );
   v_xyz = modelMatrix * vec4( position, 1.0 );
 }
-`;
+`
 const fsHeader = `#version 300 es
 precision highp float;
 precision highp int;
@@ -317,32 +355,32 @@ uniform vec4 u_color15;
 uniform vec4 u_color16;
 in vec4 v_xyz;
 out vec4 out_FragColor;
-`;
+`
 
-let scene = new THREE.Scene();
-const hudScene = new THREE.Scene();
-let fullViewport = new THREE.Vector4();
-let hudViewport = new THREE.Vector4();
-const hudSize = 256;
+let scene = new THREE.Scene()
+const hudScene = new THREE.Scene()
+let fullViewport = new THREE.Vector4()
+let hudViewport = new THREE.Vector4()
+const hudSize = 256
 
-const fov = 75.0;
-let aspectRatio = canvas.width / canvas.height;
-console.log('canvas: (' + canvas.width.toString() + ',' + canvas.height.toString() + '), aspectRatio=' + aspectRatio.toString());
-let activeCamera = null;
-let hudActiveCamera = null;
-const cameraPerspective = new THREE.PerspectiveCamera(fov, aspectRatio, 0.1, 1000);
-let resetCameraD = 5.0;
-let frustumSize = 1.0;
-const hudFrustumSize = 1.25;
+const fov = 75.0
+let aspectRatio = canvas.width / canvas.height
+console.log('canvas: (' + canvas.width.toString() + ',' + canvas.height.toString() + '), aspectRatio=' + aspectRatio.toString())
+let activeCamera = null
+let hudActiveCamera = null
+const cameraPerspective = new THREE.PerspectiveCamera(fov, aspectRatio, 0.1, 1000)
+let resetCameraD = 5.0
+let frustumSize = 1.0
+const hudFrustumSize = 1.25
 const cameraOrthographic = new THREE.OrthographicCamera(
-  -aspectRatio * frustumSize, aspectRatio * frustumSize, frustumSize, -frustumSize, 0.1, 1000);
-const hudCameraPerspective = new THREE.PerspectiveCamera(45, aspectRatio, 0.1, 1000);
+  -aspectRatio * frustumSize, aspectRatio * frustumSize, frustumSize, -frustumSize, 0.1, 1000)
+const hudCameraPerspective = new THREE.PerspectiveCamera(45, aspectRatio, 0.1, 1000)
 const hudCameraOrthographic = new THREE.OrthographicCamera(
-  -hudFrustumSize, hudFrustumSize, hudFrustumSize, -hudFrustumSize, 0.1, 1000);
+  -hudFrustumSize, hudFrustumSize, hudFrustumSize, -hudFrustumSize, 0.1, 1000)
 
-let renderer = new THREE.WebGLRenderer({ canvas: canvas, context: gl });
-renderer.setSize(canvas.width, canvas.height);
-renderer.autoClear = false;
+let renderer = new THREE.WebGLRenderer({ canvas: canvas, context: gl })
+renderer.setSize(canvas.width, canvas.height)
+renderer.autoClear = false
 
 const uniforms = {
   u_ll: { type: 'v3', value: new THREE.Vector3() }, // MBB min
@@ -366,206 +404,206 @@ const uniforms = {
   u_color14: { type: 'v4', value: new THREE.Vector4(1) },
   u_color15: { type: 'v4', value: new THREE.Vector4(1) },
   u_color16: { type: 'v4', value: new THREE.Vector4(1) },
-};
-function getUniforms() { return uniforms; }
+}
+function getUniforms() { return uniforms }
 function copyUniforms() {
-  let copy = {};
-  let keys = Object.keys(uniforms);
+  let copy = {}
+  let keys = Object.keys(uniforms)
   for (let i = 0; i < keys.length; i++) {
-    let key = keys[i];
-    copy[key] = { type: uniforms[key].type, value: uniforms[key].value };
+    let key = keys[i]
+    copy[key] = { type: uniforms[key].type, value: uniforms[key].value }
   }
-  return copy;
+  return copy
 }
 
-let modelCentroidNull = null;
-let compilerSource = '';
+let modelCentroidNull = null
+let compilerSource = ''
 function loadNewModel(source) {
-  console.log('Compiling new model.');
-  let firstRun = (compilerSource == '');
-  compilerSource = source;
-  uniformsChanged();
-  let lookAt = getLookAt();
-  controls.target0 = new THREE.Vector3(lookAt[0], lookAt[1], lookAt[2]);
+  console.log('Compiling new model.')
+  let firstRun = (compilerSource == '')
+  compilerSource = source
+  uniformsChanged()
+  let lookAt = getLookAt()
+  controls.target0 = new THREE.Vector3(lookAt[0], lookAt[1], lookAt[2])
   if (firstRun) {
-    viewCallbacks[6]();  // Reset to default view.
+    viewCallbacks[6]()  // Reset to default view.
   }
-  render();
+  render()
 }
 
 function getLookAt() {
-  const ll = new THREE.Vector3(rangeValues.minx, rangeValues.miny, rangeValues.minz);
-  const ur = new THREE.Vector3(rangeValues.maxx, rangeValues.maxy, rangeValues.maxz);
-  const cx = 0.5 * (ll.x + ur.x);
-  const cy = 0.5 * (ll.y + ur.y);
-  const cz = 0.5 * (ll.z + ur.z);
-  return [cx, cy, cz];
+  const ll = new THREE.Vector3(rangeValues.minx, rangeValues.miny, rangeValues.minz)
+  const ur = new THREE.Vector3(rangeValues.maxx, rangeValues.maxy, rangeValues.maxz)
+  const cx = 0.5 * (ll.x + ur.x)
+  const cy = 0.5 * (ll.y + ur.y)
+  const cz = 0.5 * (ll.z + ur.z)
+  return [cx, cy, cz]
 }
 function uniformsChanged() {
-  refreshRangeControllers();
-  rangeValuesChanged();
+  refreshRangeControllers()
+  rangeValuesChanged()
 }
 function rangeValuesChanged() {
-  const llx = rangeValues.llx;
-  const lly = rangeValues.lly;
-  const llz = rangeValues.llz;
-  const urx = rangeValues.urx;
-  const ury = rangeValues.ury;
-  const urz = rangeValues.urz;
-  uniforms.u_ll.value.set(llx, lly, llz);
-  uniforms.u_ur.value.set(urx, ury, urz);
-  let maxval = ((urx - llx) > (ury - lly)) ? (urx - llx) : (ury - lly);
-  maxval = (maxval > (urz - llz)) ? maxval : (urz - llz);
-  resetCameraD = maxval;
+  const llx = rangeValues.llx
+  const lly = rangeValues.lly
+  const llz = rangeValues.llz
+  const urx = rangeValues.urx
+  const ury = rangeValues.ury
+  const urz = rangeValues.urz
+  uniforms.u_ll.value.set(llx, lly, llz)
+  uniforms.u_ur.value.set(urx, ury, urz)
+  let maxval = ((urx - llx) > (ury - lly)) ? (urx - llx) : (ury - lly)
+  maxval = (maxval > (urz - llz)) ? maxval : (urz - llz)
+  resetCameraD = maxval
   // console.log('rangeValuesChanged: resetCameraD=' + resetCameraD.toString());
 
-  const ll = new THREE.Vector3(llx, lly, llz);
-  const ur = new THREE.Vector3(urx, ury, urz);
-  const lookAt = getLookAt();
-  const center = new THREE.Vector3(lookAt[0], lookAt[1], lookAt[2]);
-  const minD = -(new THREE.Vector3().subVectors(center, ll)).length();
-  const maxD = (new THREE.Vector3().subVectors(ur, center)).length();
-  let diagonal = maxD - minD;
+  const ll = new THREE.Vector3(llx, lly, llz)
+  const ur = new THREE.Vector3(urx, ury, urz)
+  const lookAt = getLookAt()
+  const center = new THREE.Vector3(lookAt[0], lookAt[1], lookAt[2])
+  const minD = -(new THREE.Vector3().subVectors(center, ll)).length()
+  const maxD = (new THREE.Vector3().subVectors(ur, center)).length()
+  let diagonal = maxD - minD
   if (diagonal <= 0.0) {
-    diagonal = 1.0;  // Avoid divide-by-zero.
+    diagonal = 1.0  // Avoid divide-by-zero.
   }
   // console.log('rangeValuesChanged: minD=' + minD.toString() + ', maxD=' + maxD.toString() + ', diagonal=' + diagonal.toString());
 
-  scene.dispose();  // This alone is not enough. Need to create a brand new scene.
-  scene = new THREE.Scene();  // Eventually add a light?
+  scene.dispose()  // This alone is not enough. Need to create a brand new scene.
+  scene = new THREE.Scene()  // Eventually add a light?
 
   modelCentroidNull = new THREE.Object3D()
-  modelCentroidNull.translateX(lookAt[0]);
-  modelCentroidNull.translateY(lookAt[1]);
-  modelCentroidNull.translateZ(lookAt[2]);
+  modelCentroidNull.translateX(lookAt[0])
+  modelCentroidNull.translateY(lookAt[1])
+  modelCentroidNull.translateZ(lookAt[2])
   // console.log('rangeValuesChanged: modelCentroidNull.position=', modelCentroidNull.position);
 
-  scene.add(modelCentroidNull);
+  scene.add(modelCentroidNull)
   // modelCentroidNull.add(new THREE.AxesHelper(diagonal));  // for debugging
   // TODO: make this a GUI option?
-  scene.add(new THREE.AxesHelper(diagonal));
+  scene.add(new THREE.AxesHelper(diagonal))
 
-  const dStep = diagonal / (uniforms.u_resolution.value + 1.0);
+  const dStep = diagonal / (uniforms.u_resolution.value + 1.0)
   for (let d = minD + dStep; d < maxD; d += dStep) {
-    let myUniforms = copyUniforms();
-    myUniforms.u_d.value = (d - minD) / (maxD - dStep - minD);
+    let myUniforms = copyUniforms()
+    myUniforms.u_d.value = (d - minD) / (maxD - dStep - minD)
     // console.log('d=' + d.toString() + ', u_d=' + myUniforms.u_d.value.toString());
-    let material = new THREE.ShaderMaterial({ uniforms: myUniforms, vertexShader: vs, fragmentShader: fsHeader + compilerSource, side: THREE.DoubleSide, transparent: true });
-    let plane = new THREE.PlaneBufferGeometry(diagonal, diagonal);  // Should this always fill the viewport?
-    let mesh = new THREE.Mesh(plane, material);
-    mesh.position.set(0, 0, d);
-    modelCentroidNull.add(mesh);
+    let material = new THREE.ShaderMaterial({ uniforms: myUniforms, vertexShader: vs, fragmentShader: fsHeader + compilerSource, side: THREE.DoubleSide, transparent: true })
+    let plane = new THREE.PlaneBufferGeometry(diagonal, diagonal)  // Should this always fill the viewport?
+    let mesh = new THREE.Mesh(plane, material)
+    mesh.position.set(0, 0, d)
+    modelCentroidNull.add(mesh)
   }
 }
 
-const hud = new THREE.Object3D();
+const hud = new THREE.Object3D()
 
-const axisLength = 1.0;
-let axesHelper = new THREE.AxesHelper(axisLength);
-hud.add(axesHelper);
+const axisLength = 1.0
+let axesHelper = new THREE.AxesHelper(axisLength)
+hud.add(axesHelper)
 
-const viewPlane = new THREE.CircleBufferGeometry(0.4, 32);
-const viewCircle = new THREE.CircleBufferGeometry(0.1, 32);
+const viewPlane = new THREE.CircleBufferGeometry(0.4, 32)
+const viewCircle = new THREE.CircleBufferGeometry(0.1, 32)
 const viewPlanes = [viewPlane, viewPlane, viewPlane, viewPlane, viewPlane, viewPlane,
   viewCircle, viewCircle, viewCircle, viewCircle,
-  viewCircle, viewCircle, viewCircle, viewCircle];
+  viewCircle, viewCircle, viewCircle, viewCircle]
 const viewPositions = [[0.5, 0, 0], [-0.5, 0, 0], [0, 0.5, 0], [0, -0.5, 0], [0, 0, 0.5], [0, 0, -0.5],
 [0.4, -0.4, 0.4], [0.4, 0.4, 0.4], [-0.4, 0.4, 0.4], [-0.4, -0.4, 0.4],
-[0.4, -0.4, -0.4], [0.4, 0.4, -0.4], [-0.4, 0.4, -0.4], [-0.4, -0.4, -0.4]];
-const halfPi = 0.5 * Math.PI;
-const quarterPi = 0.25 * Math.PI;
+[0.4, -0.4, -0.4], [0.4, 0.4, -0.4], [-0.4, 0.4, -0.4], [-0.4, -0.4, -0.4]]
+const halfPi = 0.5 * Math.PI
+const quarterPi = 0.25 * Math.PI
 const viewRotations = [[0, halfPi, 0], [0, -halfPi, 0], [-halfPi, 0, 0], [halfPi, 0, 0], [0, 0, 0], [Math.PI, 0, Math.PI],
 [quarterPi, 0, quarterPi, 'ZYX'], [-quarterPi, 0, -quarterPi, 'ZYX'], [-quarterPi, 0, quarterPi, 'ZYX'], [quarterPi, 0, -quarterPi, 'ZYX'],
-[-quarterPi, 0, quarterPi, 'ZYX'], [quarterPi, 0, -quarterPi, 'ZYX'], [quarterPi, 0, quarterPi, 'ZYX'], [-quarterPi, 0, -quarterPi, 'ZYX']];
+[-quarterPi, 0, quarterPi, 'ZYX'], [quarterPi, 0, -quarterPi, 'ZYX'], [quarterPi, 0, quarterPi, 'ZYX'], [-quarterPi, 0, -quarterPi, 'ZYX']]
 const viewCallbacks = [
-  function () { toOrtho(rightView); let p = getLookAt(); controls.position0.set(p[0] + resetCameraD, p[1] + 0, p[2] + 0); controls.up0.set(0, 0, 1); controls.reset(); },  // right
-  function () { toOrtho(leftView); let p = getLookAt(); controls.position0.set(p[0] + -resetCameraD, p[1] + 0, p[2] + 0); controls.up0.set(0, 0, 1); controls.reset(); },  // left
-  function () { toOrtho(backView); let p = getLookAt(); controls.position0.set(p[0] + 0, p[1] + resetCameraD, p[2] + 0); controls.up0.set(0, 0, 1); controls.reset(); },  // back
-  function () { toOrtho(frontView); let p = getLookAt(); controls.position0.set(p[0] + 0, p[1] + -resetCameraD, p[2] + 0); controls.up0.set(0, 0, 1); controls.reset(); },  // front
-  function () { toOrtho(topView); let p = getLookAt(); controls.position0.set(p[0] + 0, p[1] + 0, p[2] + resetCameraD); controls.up0.set(0, 1, 0); controls.reset(); },  // top
-  function () { toOrtho(bottomView); let p = getLookAt(); controls.position0.set(p[0] + 0, p[1] + 0, p[2] + -resetCameraD); controls.up0.set(0, -1, 0); controls.reset(); }, // bottom
-  function () { toPersp(); let p = getLookAt(); controls.position0.set(p[0] + resetCameraD, p[1] + -resetCameraD, p[2] + resetCameraD); controls.up0.set(0, 0, 1); controls.reset(); },
-  function () { toPersp(); let p = getLookAt(); controls.position0.set(p[0] + resetCameraD, p[1] + resetCameraD, p[2] + resetCameraD); controls.up0.set(0, 0, 1); controls.reset(); },
-  function () { toPersp(); let p = getLookAt(); controls.position0.set(p[0] + -resetCameraD, p[1] + resetCameraD, p[2] + resetCameraD); controls.up0.set(0, 0, 1); controls.reset(); },
-  function () { toPersp(); let p = getLookAt(); controls.position0.set(p[0] + -resetCameraD, p[1] + -resetCameraD, p[2] + resetCameraD); controls.up0.set(0, 0, 1); controls.reset(); },
-  function () { toPersp(); let p = getLookAt(); controls.position0.set(p[0] + resetCameraD, p[1] + -resetCameraD, p[2] + -resetCameraD); controls.up0.set(0, 0, 1); controls.reset(); },
-  function () { toPersp(); let p = getLookAt(); controls.position0.set(p[0] + resetCameraD, p[1] + resetCameraD, p[2] + -resetCameraD); controls.up0.set(0, 0, 1); controls.reset(); },
-  function () { toPersp(); let p = getLookAt(); controls.position0.set(p[0] + -resetCameraD, p[1] + resetCameraD, p[2] + -resetCameraD); controls.up0.set(0, 0, 1); controls.reset(); },
-  function () { toPersp(); let p = getLookAt(); controls.position0.set(p[0] + -resetCameraD, p[1] + -resetCameraD, p[2] + -resetCameraD); controls.up0.set(0, 0, 1); controls.reset(); }
-];
+  function () { toOrtho(rightView); let p = getLookAt(); controls.position0.set(p[0] + resetCameraD, p[1] + 0, p[2] + 0); controls.up0.set(0, 0, 1); controls.reset() },  // right
+  function () { toOrtho(leftView); let p = getLookAt(); controls.position0.set(p[0] + -resetCameraD, p[1] + 0, p[2] + 0); controls.up0.set(0, 0, 1); controls.reset() },  // left
+  function () { toOrtho(backView); let p = getLookAt(); controls.position0.set(p[0] + 0, p[1] + resetCameraD, p[2] + 0); controls.up0.set(0, 0, 1); controls.reset() },  // back
+  function () { toOrtho(frontView); let p = getLookAt(); controls.position0.set(p[0] + 0, p[1] + -resetCameraD, p[2] + 0); controls.up0.set(0, 0, 1); controls.reset() },  // front
+  function () { toOrtho(topView); let p = getLookAt(); controls.position0.set(p[0] + 0, p[1] + 0, p[2] + resetCameraD); controls.up0.set(0, 1, 0); controls.reset() },  // top
+  function () { toOrtho(bottomView); let p = getLookAt(); controls.position0.set(p[0] + 0, p[1] + 0, p[2] + -resetCameraD); controls.up0.set(0, -1, 0); controls.reset() }, // bottom
+  function () { toPersp(); let p = getLookAt(); controls.position0.set(p[0] + resetCameraD, p[1] + -resetCameraD, p[2] + resetCameraD); controls.up0.set(0, 0, 1); controls.reset() },
+  function () { toPersp(); let p = getLookAt(); controls.position0.set(p[0] + resetCameraD, p[1] + resetCameraD, p[2] + resetCameraD); controls.up0.set(0, 0, 1); controls.reset() },
+  function () { toPersp(); let p = getLookAt(); controls.position0.set(p[0] + -resetCameraD, p[1] + resetCameraD, p[2] + resetCameraD); controls.up0.set(0, 0, 1); controls.reset() },
+  function () { toPersp(); let p = getLookAt(); controls.position0.set(p[0] + -resetCameraD, p[1] + -resetCameraD, p[2] + resetCameraD); controls.up0.set(0, 0, 1); controls.reset() },
+  function () { toPersp(); let p = getLookAt(); controls.position0.set(p[0] + resetCameraD, p[1] + -resetCameraD, p[2] + -resetCameraD); controls.up0.set(0, 0, 1); controls.reset() },
+  function () { toPersp(); let p = getLookAt(); controls.position0.set(p[0] + resetCameraD, p[1] + resetCameraD, p[2] + -resetCameraD); controls.up0.set(0, 0, 1); controls.reset() },
+  function () { toPersp(); let p = getLookAt(); controls.position0.set(p[0] + -resetCameraD, p[1] + resetCameraD, p[2] + -resetCameraD); controls.up0.set(0, 0, 1); controls.reset() },
+  function () { toPersp(); let p = getLookAt(); controls.position0.set(p[0] + -resetCameraD, p[1] + -resetCameraD, p[2] + -resetCameraD); controls.up0.set(0, 0, 1); controls.reset() }
+]
 
 function commonViewCalc(left, right, top, bottom) {
-  aspectRatio = canvas.width / canvas.height;
-  let width = (right - left);
-  let height = (top - bottom);
-  const fs = 0.542;  // This value matches nicely with the orthographic view.
-  frustumSize = fs * height;
-  resetCameraD = 0.5 * height;
+  aspectRatio = canvas.width / canvas.height
+  let width = (right - left)
+  let height = (top - bottom)
+  const fs = 0.542  // This value matches nicely with the orthographic view.
+  frustumSize = fs * height
+  resetCameraD = 0.5 * height
   if (frustumSize * aspectRatio < fs * width) {
-    frustumSize = fs * width / aspectRatio;
-    resetCameraD = 0.5 * width;
+    frustumSize = fs * width / aspectRatio
+    resetCameraD = 0.5 * width
   }
-  console.log('commonViewCalc: aspectRatio=' + aspectRatio.toString() + ', width=' + width.toString() + ', height=' + height.toString() + ', frustumSize=' + frustumSize.toString() + ', resetCameraD=' + resetCameraD.toString());
+  console.log('commonViewCalc: aspectRatio=' + aspectRatio.toString() + ', width=' + width.toString() + ', height=' + height.toString() + ', frustumSize=' + frustumSize.toString() + ', resetCameraD=' + resetCameraD.toString())
   return {
     left: -aspectRatio * frustumSize,
     right: aspectRatio * frustumSize,
     top: frustumSize,
     bottom: -frustumSize
-  };
+  }
 }
 function rightView() {
   // console.log('rightView');
-  let left = rangeValues.miny;
-  let right = rangeValues.maxy;
-  let top = rangeValues.maxz;
-  let bottom = rangeValues.minz;
-  return commonViewCalc(left, right, top, bottom);
+  let left = rangeValues.miny
+  let right = rangeValues.maxy
+  let top = rangeValues.maxz
+  let bottom = rangeValues.minz
+  return commonViewCalc(left, right, top, bottom)
 }
 function leftView() {
   // console.log('leftView');
-  let left = rangeValues.maxy;
-  let right = rangeValues.miny;
-  let top = rangeValues.maxz;
-  let bottom = rangeValues.minz;
-  return commonViewCalc(left, right, top, bottom);
+  let left = rangeValues.maxy
+  let right = rangeValues.miny
+  let top = rangeValues.maxz
+  let bottom = rangeValues.minz
+  return commonViewCalc(left, right, top, bottom)
 }
 function backView() {
   // console.log('backView');
-  let left = rangeValues.maxx;
-  let right = rangeValues.minx;
-  let top = rangeValues.maxz;
-  let bottom = rangeValues.minz;
-  return commonViewCalc(left, right, top, bottom);
+  let left = rangeValues.maxx
+  let right = rangeValues.minx
+  let top = rangeValues.maxz
+  let bottom = rangeValues.minz
+  return commonViewCalc(left, right, top, bottom)
 }
 function frontView() {
   // console.log('frontView');
-  let left = rangeValues.minx;
-  let right = rangeValues.maxx;
-  let top = rangeValues.maxz;
-  let bottom = rangeValues.minz;
-  return commonViewCalc(left, right, top, bottom);
+  let left = rangeValues.minx
+  let right = rangeValues.maxx
+  let top = rangeValues.maxz
+  let bottom = rangeValues.minz
+  return commonViewCalc(left, right, top, bottom)
 }
 function topView() {
   // console.log('topView');
-  let left = rangeValues.minx;
-  let right = rangeValues.maxx;
-  let top = rangeValues.maxy;
-  let bottom = rangeValues.miny;
-  return commonViewCalc(left, right, top, bottom);
+  let left = rangeValues.minx
+  let right = rangeValues.maxx
+  let top = rangeValues.maxy
+  let bottom = rangeValues.miny
+  return commonViewCalc(left, right, top, bottom)
 }
 function bottomView() {
   // console.log('bottomView');
-  let left = rangeValues.minx;
-  let right = rangeValues.maxx;
-  let top = rangeValues.miny;
-  let bottom = rangeValues.maxy;
-  return commonViewCalc(left, right, top, bottom);
+  let left = rangeValues.minx
+  let right = rangeValues.maxx
+  let top = rangeValues.miny
+  let bottom = rangeValues.maxy
+  return commonViewCalc(left, right, top, bottom)
 }
 
-const viewMesh = [];
-const loadManager = new THREE.LoadingManager();
-const loader = new THREE.TextureLoader(loadManager);
-const circleMaterial = new THREE.MeshBasicMaterial({ color: 0xffff00, side: THREE.DoubleSide, transparent: false });
+const viewMesh = []
+const loadManager = new THREE.LoadingManager()
+const loader = new THREE.TextureLoader(loadManager)
+const circleMaterial = new THREE.MeshBasicMaterial({ color: 0xffff00, side: THREE.DoubleSide, transparent: false })
 
 const materials = [
   new THREE.MeshBasicMaterial({ map: loader.load('images/right.png'), side: THREE.DoubleSide, transparent: false }),
@@ -582,264 +620,264 @@ const materials = [
   circleMaterial,
   circleMaterial,
   circleMaterial,
-];
+]
 
-materials[0].map.center.set(.5, .5);
-materials[0].map.rotation = THREE.Math.degToRad(90);
-materials[1].map.center.set(.5, .5);
-materials[1].map.rotation = THREE.Math.degToRad(-90);
-materials[2].map.center.set(.5, .5);
-materials[2].map.rotation = THREE.Math.degToRad(180);
-materials[5].map.center.set(.5, .5);
-materials[5].map.rotation = THREE.Math.degToRad(180);
+materials[0].map.center.set(.5, .5)
+materials[0].map.rotation = THREE.Math.degToRad(90)
+materials[1].map.center.set(.5, .5)
+materials[1].map.rotation = THREE.Math.degToRad(-90)
+materials[2].map.center.set(.5, .5)
+materials[2].map.rotation = THREE.Math.degToRad(180)
+materials[5].map.center.set(.5, .5)
+materials[5].map.rotation = THREE.Math.degToRad(180)
 
-const clickCallbacksByUUID = {};
+const clickCallbacksByUUID = {}
 loadManager.onLoad = () => {
   for (let i = 0; i < materials.length; i++) {
-    viewMesh[i] = new THREE.Mesh(viewPlanes[i], materials[i]);
-    viewMesh[i].position.x = viewPositions[i][0];
-    viewMesh[i].position.y = viewPositions[i][1];
-    viewMesh[i].position.z = viewPositions[i][2];
+    viewMesh[i] = new THREE.Mesh(viewPlanes[i], materials[i])
+    viewMesh[i].position.x = viewPositions[i][0]
+    viewMesh[i].position.y = viewPositions[i][1]
+    viewMesh[i].position.z = viewPositions[i][2]
     if (viewRotations[i].length == 3) {
-      viewMesh[i].rotation.x = viewRotations[i][0];
-      viewMesh[i].rotation.y = viewRotations[i][1];
-      viewMesh[i].rotation.z = viewRotations[i][2];
+      viewMesh[i].rotation.x = viewRotations[i][0]
+      viewMesh[i].rotation.y = viewRotations[i][1]
+      viewMesh[i].rotation.z = viewRotations[i][2]
     } else {
-      const params = viewRotations[i];
-      const euler = new THREE.Euler(params[0], params[1], params[2], params[3]);
-      viewMesh[i].setRotationFromEuler(euler);
+      const params = viewRotations[i]
+      const euler = new THREE.Euler(params[0], params[1], params[2], params[3])
+      viewMesh[i].setRotationFromEuler(euler)
     }
-    clickCallbacksByUUID[viewMesh[i].uuid] = viewCallbacks[i];
-    hud.add(viewMesh[i]);
+    clickCallbacksByUUID[viewMesh[i].uuid] = viewCallbacks[i]
+    hud.add(viewMesh[i])
   }
-};
+}
 
 // Axis labels:
-const axisOffset = axisLength + 0.1;
+const axisOffset = axisLength + 0.1
 let text_opts_red = {
   'font_size': 20,
   'background_color': { 'r': 0, 'g': 0, 'b': 0, 'a': 1 },
   'text_color': { 'r': 255, 'g': 0, 'b': 0, 'a': 1 }
-};
-let labels_data_x = ['X'];
+}
+let labels_data_x = ['X']
 let labels_x = axisLabels(labels_data_x, { 'x': 1 }, [axisOffset, 0, 0],
-  text_opts_red);
-hud.add(labels_x);
+  text_opts_red)
+hud.add(labels_x)
 let text_opts_green = {
   'font_size': 20,
   'background_color': { 'r': 0, 'g': 0, 'b': 0, 'a': 1 },
   'text_color': { 'r': 0, 'g': 255, 'b': 0, 'a': 1 }
-};
-let labels_data_y = ['Y'];
+}
+let labels_data_y = ['Y']
 let labels_y = axisLabels(labels_data_y, { 'y': 1 }, [0, axisOffset, 0],
-  text_opts_green);
-hud.add(labels_y);
+  text_opts_green)
+hud.add(labels_y)
 let text_opts_blue = {
   'font_size': 20,
   'background_color': { 'r': 0, 'g': 0, 'b': 0, 'a': 1 },
   'text_color': { 'r': 0, 'g': 0, 'b': 255, 'a': 1 }
-};
-let labels_data_z = ['Z'];
+}
+let labels_data_z = ['Z']
 let labels_z = axisLabels(labels_data_z, { 'z': 1 }, [0, 0, axisOffset],
-  text_opts_blue);
-hud.add(labels_z);
+  text_opts_blue)
+hud.add(labels_z)
 
-hudScene.add(hud);
+hudScene.add(hud)
 
 // Initialize cameras on startup:
-cameraPerspective.position.x = resetCameraD;
-cameraPerspective.position.y = -resetCameraD;
-cameraPerspective.position.z = resetCameraD;
-cameraPerspective.up.y = 0;
-cameraPerspective.up.z = 1;
-cameraPerspective.lookAt([0, 0, 0]);
-activeCamera = cameraPerspective;
-cameraOrthographic.position.x = 0;
-cameraOrthographic.position.y = -2;
-cameraOrthographic.position.z = 0;
-cameraOrthographic.up.y = 0;
-cameraOrthographic.up.z = 1;
-cameraOrthographic.lookAt([0, 0, 0]);
-hudCameraPerspective.position.copy(cameraPerspective.position);
-hudCameraPerspective.up.y = 0;
-hudCameraPerspective.up.z = 1;
-hudCameraPerspective.lookAt([0, 0, 0]);
-hudActiveCamera = hudCameraPerspective;
-hudCameraOrthographic.position.copy(cameraOrthographic.position);
-hudCameraOrthographic.up.y = 0;
-hudCameraOrthographic.up.z = 1;
-hudCameraOrthographic.lookAt([0, 0, 0]);
+cameraPerspective.position.x = resetCameraD
+cameraPerspective.position.y = -resetCameraD
+cameraPerspective.position.z = resetCameraD
+cameraPerspective.up.y = 0
+cameraPerspective.up.z = 1
+cameraPerspective.lookAt([0, 0, 0])
+activeCamera = cameraPerspective
+cameraOrthographic.position.x = 0
+cameraOrthographic.position.y = -2
+cameraOrthographic.position.z = 0
+cameraOrthographic.up.y = 0
+cameraOrthographic.up.z = 1
+cameraOrthographic.lookAt([0, 0, 0])
+hudCameraPerspective.position.copy(cameraPerspective.position)
+hudCameraPerspective.up.y = 0
+hudCameraPerspective.up.z = 1
+hudCameraPerspective.lookAt([0, 0, 0])
+hudActiveCamera = hudCameraPerspective
+hudCameraOrthographic.position.copy(cameraOrthographic.position)
+hudCameraOrthographic.up.y = 0
+hudCameraOrthographic.up.z = 1
+hudCameraOrthographic.lookAt([0, 0, 0])
 // const cameraHelper = new THREE.CameraHelper(activeCamera);
 // scene.add(cameraHelper);
 
-let controls = new THREE.TrackballControls(activeCamera, canvas);
+let controls = new THREE.TrackballControls(activeCamera, canvas)
 
-controls.rotateSpeed = 2.0;
-controls.zoomSpeed = 1.2;
-controls.panSpeed = 0.8;
+controls.rotateSpeed = 2.0
+controls.zoomSpeed = 1.2
+controls.panSpeed = 0.8
 
-controls.noZoom = false;
-controls.noPan = false;
+controls.noZoom = false
+controls.noPan = false
 
-controls.staticMoving = true;
-controls.dynamicDampingFactor = 0.3;
+controls.staticMoving = true
+controls.dynamicDampingFactor = 0.3
 
-controls.keys = [65, 83, 68];
+controls.keys = [65, 83, 68]
 
-controls.addEventListener('change', render);
-canvas.addEventListener('resize', onCanvasResize, false);
-canvas.addEventListener('mousedown', onCanvasClick, false);
-canvas.addEventListener('touchstart', onCanvasClick, false);
-onCanvasResize();
-animate();
+controls.addEventListener('change', render)
+canvas.addEventListener('resize', onCanvasResize, false)
+canvas.addEventListener('mousedown', onCanvasClick, false)
+canvas.addEventListener('touchstart', onCanvasClick, false)
+onCanvasResize()
+animate()
 
 function toOrtho(getViewport) {
-  const viewport = getViewport();
-  console.log(viewport);
-  cameraOrthographic.left = viewport.left;
-  cameraOrthographic.right = viewport.right;
-  cameraOrthographic.top = viewport.top;
-  cameraOrthographic.bottom = viewport.bottom;
-  cameraOrthographic.updateProjectionMatrix();
-  activeCamera = cameraOrthographic;
-  controls.object = activeCamera;
-  hudActiveCamera = hudCameraOrthographic;
+  const viewport = getViewport()
+  console.log(viewport)
+  cameraOrthographic.left = viewport.left
+  cameraOrthographic.right = viewport.right
+  cameraOrthographic.top = viewport.top
+  cameraOrthographic.bottom = viewport.bottom
+  cameraOrthographic.updateProjectionMatrix()
+  activeCamera = cameraOrthographic
+  controls.object = activeCamera
+  hudActiveCamera = hudCameraOrthographic
 }
 function toPersp() {
-  activeCamera = cameraPerspective;
-  controls.object = activeCamera;
-  hudActiveCamera = hudCameraPerspective;
+  activeCamera = cameraPerspective
+  controls.object = activeCamera
+  hudActiveCamera = hudCameraPerspective
 }
 
-let raycaster = new THREE.Raycaster();
-let mouse = new THREE.Vector2();
-let onClickPosition = new THREE.Vector2();
+let raycaster = new THREE.Raycaster()
+let mouse = new THREE.Vector2()
+let onClickPosition = new THREE.Vector2()
 let getMousePosition = function (dom, x, y) {
-  let rect = dom.getBoundingClientRect();
+  let rect = dom.getBoundingClientRect()
   return [(x + hudViewport.width - rect.right) / hudViewport.width,
-  (y - rect.top) / hudViewport.height];
-};
+  (y - rect.top) / hudViewport.height]
+}
 let getIntersects = function (point, objects) {
-  mouse.set((point.x * 2) - 1, - (point.y * 2) + 1);
-  raycaster.setFromCamera(mouse, hudActiveCamera);
-  return raycaster.intersectObjects(objects);
-};
+  mouse.set((point.x * 2) - 1, - (point.y * 2) + 1)
+  raycaster.setFromCamera(mouse, hudActiveCamera)
+  return raycaster.intersectObjects(objects)
+}
 function activateHudViewport() {
-  renderer.getViewport(fullViewport);
-  let width = hudSize;
+  renderer.getViewport(fullViewport)
+  let width = hudSize
   if (fullViewport.width < hudSize) {
-    width = fullViewport.width;
+    width = fullViewport.width
   }
-  let height = hudSize;
+  let height = hudSize
   if (fullViewport.height < hudSize) {
-    height = fullViewport.height;
+    height = fullViewport.height
   }
   hudViewport.set(fullViewport.width - width, fullViewport.height - height,
-    width, height);
-  renderer.setViewport(hudViewport);
+    width, height)
+  renderer.setViewport(hudViewport)
 }
 function onCanvasClick(evt) {
-  const x = evt.clientX;
-  const y = evt.clientY;
-  let array = getMousePosition(canvas, x, y);
-  if (array[0] < 0. || array[1] > 1.) { return; }
+  const x = evt.clientX
+  const y = evt.clientY
+  let array = getMousePosition(canvas, x, y)
+  if (array[0] < 0. || array[1] > 1.) { return }
 
-  evt.preventDefault();
-  onClickPosition.fromArray(array);
-  let intersects = getIntersects(onClickPosition, hud.children);
+  evt.preventDefault()
+  onClickPosition.fromArray(array)
+  let intersects = getIntersects(onClickPosition, hud.children)
   for (let i = 0; i < intersects.length; i++) {
-    const intersect = intersects[i];
-    if (!intersect.uv || intersect.object.type !== 'Mesh') { continue; }
-    let clickCallback = clickCallbacksByUUID[intersect.object.uuid];
+    const intersect = intersects[i]
+    if (!intersect.uv || intersect.object.type !== 'Mesh') { continue }
+    let clickCallback = clickCallbacksByUUID[intersect.object.uuid]
     if (clickCallback) {
-      clickCallback();
-      return false;
+      clickCallback()
+      return false
     }
   }
-  return true;
+  return true
 }
 function onCanvasResize() {
-  const aspectRatio = canvas.width / canvas.height;
-  cameraOrthographic.left = -aspectRatio * frustumSize;
-  cameraOrthographic.right = aspectRatio * frustumSize;
-  cameraOrthographic.top = frustumSize;
-  cameraOrthographic.bottom = -frustumSize;
-  cameraOrthographic.updateProjectionMatrix();
-  cameraPerspective.aspect = aspectRatio;
-  cameraPerspective.updateProjectionMatrix();
+  const aspectRatio = canvas.width / canvas.height
+  cameraOrthographic.left = -aspectRatio * frustumSize
+  cameraOrthographic.right = aspectRatio * frustumSize
+  cameraOrthographic.top = frustumSize
+  cameraOrthographic.bottom = -frustumSize
+  cameraOrthographic.updateProjectionMatrix()
+  cameraPerspective.aspect = aspectRatio
+  cameraPerspective.updateProjectionMatrix()
 
-  let width = hudSize;
-  let height = hudSize;
+  let width = hudSize
+  let height = hudSize
   if (canvas.width < hudSize) {
-    width = canvas.width;
+    width = canvas.width
   }
   if (canvas.height < hudSize) {
-    height = canvas.height;
+    height = canvas.height
   }
-  const hudAspectRatio = width / height;
-  hudCameraOrthographic.left = -hudAspectRatio * hudFrustumSize;
-  hudCameraOrthographic.right = hudAspectRatio * hudFrustumSize;
-  hudCameraOrthographic.top = hudFrustumSize;
-  hudCameraOrthographic.bottom = -hudFrustumSize;
-  hudCameraOrthographic.updateProjectionMatrix();
-  hudCameraPerspective.aspect = hudAspectRatio;
-  hudCameraPerspective.updateProjectionMatrix();
+  const hudAspectRatio = width / height
+  hudCameraOrthographic.left = -hudAspectRatio * hudFrustumSize
+  hudCameraOrthographic.right = hudAspectRatio * hudFrustumSize
+  hudCameraOrthographic.top = hudFrustumSize
+  hudCameraOrthographic.bottom = -hudFrustumSize
+  hudCameraOrthographic.updateProjectionMatrix()
+  hudCameraPerspective.aspect = hudAspectRatio
+  hudCameraPerspective.updateProjectionMatrix()
 
-  renderer.setSize(canvas.width, canvas.height);
-  renderer.getViewport(fullViewport);
-  controls.handleResize();
-  render();
+  renderer.setSize(canvas.width, canvas.height)
+  renderer.getViewport(fullViewport)
+  controls.handleResize()
+  render()
 }
 function animate() {
-  controls.update();
-  requestAnimationFrame(animate);
+  controls.update()
+  requestAnimationFrame(animate)
 }
 
-let errorRE = /ERROR: (\d+):(\d+):/;
+let errorRE = /ERROR: (\d+):(\d+):/
 function checkCompilerErrors() {
-  let currentCode = fsHeader + compilerSource;
+  let currentCode = fsHeader + compilerSource
   for (let i = 0; i < renderer.info.programs.length; i++) {
-    let program = renderer.info.programs[i];
+    let program = renderer.info.programs[i]
     if (program.name !== 'ShaderMaterial' || !program.diagnostics) {
-      continue;
+      continue
     }
     if (program.cacheKey.substr(0, currentCode.length) !== currentCode) {
       continue
     }
     if (program.diagnostics.fragmentShader.log) {
-      let headerLines = fsHeader.split(/\r\n|\r|\n/).length;
-      let prefixLines = program.diagnostics.fragmentShader.prefix.split(/\r\n|\r|\n/).length;
-      let log = program.diagnostics.fragmentShader.log;
-      let logfDiv = document.getElementById('logf');
-      let match = errorRE.exec(log);
+      let headerLines = fsHeader.split(/\r\n|\r|\n/).length
+      let prefixLines = program.diagnostics.fragmentShader.prefix.split(/\r\n|\r|\n/).length
+      let log = program.diagnostics.fragmentShader.log
+      let logfDiv = document.getElementById('logf')
+      let match = errorRE.exec(log)
       if (match) {
         // highlight the error location.
-        let column = match[1];
-        let line = match[2] - prefixLines - headerLines + 3;
-        highlightShaderError(line, column);
-        log = 'ERROR: ' + (parseInt(column, 10) + 1).toString() + ':' + line.toString() + ':' + log.substr(match[0].length);
+        let column = match[1]
+        let line = match[2] - prefixLines - headerLines + 3
+        highlightShaderError(line, column)
+        log = 'ERROR: ' + (parseInt(column, 10) + 1).toString() + ':' + line.toString() + ':' + log.substr(match[0].length)
       }
-      logfDiv.innerHTML = '<div>' + log + '</div>';
+      logfDiv.innerHTML = '<div>' + log + '</div>'
     }
   }
 }
 function render() {
-  renderer.clear();
+  renderer.clear()
 
   if (modelCentroidNull != null) {
-    modelCentroidNull.lookAt(activeCamera.position);  // comment out to debug.
+    modelCentroidNull.lookAt(activeCamera.position)  // comment out to debug.
   }
-  renderer.render(scene, activeCamera);
-  checkCompilerErrors();
+  renderer.render(scene, activeCamera)
+  checkCompilerErrors()
 
-  activateHudViewport();
-  renderer.clearDepth();
-  hudActiveCamera.quaternion.copy(activeCamera.quaternion);
-  hudActiveCamera.position.set(0, 0, 3.25);
-  hudActiveCamera.position.applyQuaternion(hudActiveCamera.quaternion);
-  renderer.render(hudScene, hudActiveCamera);
+  activateHudViewport()
+  renderer.clearDepth()
+  hudActiveCamera.quaternion.copy(activeCamera.quaternion)
+  hudActiveCamera.position.set(0, 0, 3.25)
+  hudActiveCamera.position.applyQuaternion(hudActiveCamera.quaternion)
+  renderer.render(hudScene, hudActiveCamera)
   // console.log('restoring viewport to full canvas:', fullViewport);
-  renderer.setViewport(fullViewport);
+  renderer.setViewport(fullViewport)
 }
 
 // let sliceScene = null;
