@@ -48,18 +48,10 @@ func main() {
 	}
 
 	// Install callbacks.
-	cb := js.FuncOf(compileShader)
-	v := js.Global().Get("installCompileShader")
-	if v.Type() == js.TypeFunction {
-		// logf("Installing compileShader callback")
-		v.Invoke(cb)
-	}
-	cb = js.FuncOf(updateJSONOptionsCallback)
-	v = js.Global().Get("installUpdateJSONOptionsCallback")
-	if v.Type() == js.TypeFunction {
-		// logf("Installing updateJSONOptions callback")
-		v.Invoke(cb)
-	}
+	installCallback("installCompileShader", compileShader)
+	installCallback("installUpdateJSONOptionsCallback", updateJSONOptionsCallback)
+	installCallback("installAlreadyCached", alreadyCached)
+	installCallback("installSaveToCache", saveToCache)
 
 	// // Install slice-button callback.
 	// cb2 := js.FuncOf(sliceShader)
@@ -77,17 +69,20 @@ func main() {
 
 	logf("Application irmf-editor is now started")
 
-	// This is a hack, but for some reason, the Go runtime must make
-	// a single roundtrip call before calling select to prevent later
-	// roundtrips from causing deadlock!
-	if buf, err := curl("https://lygia.xyz/math/decimation.glsl"); err != nil {
-		logf("request to lygia failed: %v", err)
-	} else {
-		logf("successfully retrieved %v bytes from lygia", len(buf))
-	}
-
 	// prevent program from terminating
 	select {}
+}
+
+type jsFunc func(this js.Value, args []js.Value) interface{}
+
+func installCallback(name string, fn jsFunc) {
+	cb := js.FuncOf(fn)
+	v := js.Global().Get(name)
+	if v.Type() == js.TypeFunction {
+		v.Invoke(cb)
+	} else {
+		logf("Unable to install callback %v", name)
+	}
 }
 
 func compileShader(this js.Value, args []js.Value) interface{} {
@@ -518,6 +513,29 @@ func loadSource() []byte {
 }
 
 var curlCache = map[string][]byte{}
+
+func alreadyCached(this js.Value, args []js.Value) interface{} {
+	if len(args) != 1 {
+		logf("alreadyCached: expected 1 arg, got %v", len(args))
+		return nil
+	}
+
+	url := args[0].String()
+	_, ok := curlCache[url]
+	return ok
+}
+
+func saveToCache(this js.Value, args []js.Value) interface{} {
+	if len(args) != 2 {
+		logf("saveToCache: expected 2 args, got %v", len(args))
+		return nil
+	}
+
+	url := args[0].String()
+	body := []byte(args[1].String())
+	curlCache[url] = body
+	return nil
+}
 
 func curl(url string) ([]byte, error) {
 	buf, ok := curlCache[url]
