@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	"math"
 	"net/http"
+	"regexp"
 	"strings"
 	"syscall/js"
 	"time"
@@ -20,6 +21,10 @@ var (
 	logfDiv       js.Value
 	sliceButton   js.Value
 	setResolution js.Value
+)
+
+const (
+	githubRawPrefix = "https://raw.githubusercontent.com/"
 )
 
 func main() {
@@ -47,18 +52,10 @@ func main() {
 	}
 
 	// Install callbacks.
-	cb := js.FuncOf(compileShader)
-	v := js.Global().Get("installCompileShader")
-	if v.Type() == js.TypeFunction {
-		logf("Installing compileShader callback")
-		v.Invoke(cb)
-	}
-	cb = js.FuncOf(updateJSONOptionsCallback)
-	v = js.Global().Get("installUpdateJSONOptionsCallback")
-	if v.Type() == js.TypeFunction {
-		logf("Installing updateJSONOptions callback")
-		v.Invoke(cb)
-	}
+	installCallback("installCompileShader", compileShader)
+	installCallback("installUpdateJSONOptionsCallback", updateJSONOptionsCallback)
+	installCallback("installAlreadyCached", alreadyCached)
+	installCallback("installSaveToCache", saveToCache)
 
 	// // Install slice-button callback.
 	// cb2 := js.FuncOf(sliceShader)
@@ -77,8 +74,19 @@ func main() {
 	logf("Application irmf-editor is now started")
 
 	// prevent program from terminating
-	c := make(chan struct{}, 0)
-	<-c
+	select {}
+}
+
+type jsFunc func(this js.Value, args []js.Value) interface{}
+
+func installCallback(name string, fn jsFunc) {
+	cb := js.FuncOf(fn)
+	v := js.Global().Get(name)
+	if v.Type() == js.TypeFunction {
+		v.Invoke(cb)
+	} else {
+		logf("Unable to install callback %v", name)
+	}
 }
 
 func compileShader(this js.Value, args []js.Value) interface{} {
@@ -165,6 +173,8 @@ func initShader(src []byte) interface{} {
 		rangeValues.Set("urz", jsonBlob.Max[2])
 		rangeValues.Set("maxz", jsonBlob.Max[2])
 	}
+
+	newShader = processIncludes(newShader)
 
 	// logf("Compiling new model shader:\n%v", newShader)
 	js.Global().Call("loadNewModel", newShader+fsFooter(jsonBlob.Materials))
@@ -487,7 +497,6 @@ func updateJSONOptions(jsonBlob *irmf) {
 
 func loadSource() []byte {
 	const oldPrefix = "/?s=github.com/"
-	const newPrefix = "https://raw.githubusercontent.com/"
 	url := js.Global().Get("document").Get("location").Get("href").String()
 	i := strings.Index(url, oldPrefix)
 	if i < 0 {
@@ -501,22 +510,117 @@ func loadSource() []byte {
 		return nil
 	}
 
-	location = newPrefix + strings.Replace(location, "/blob/", "/", 1)
-
-	resp, err := http.Get(location)
-	if err != nil {
-		logf("Unable to download source from: %v", location)
-		js.Global().Call("alert", "unable to load IRMF shader")
-		return nil
-	}
-	buf, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		logf("Unable to ready response body.")
-		return nil
-	}
-	resp.Body.Close()
-	logf("Read %v bytes from GitHub.", len(buf))
+	location = githubRawPrefix + strings.Replace(location, "/blob/", "/", 1)
+	buf, _ := curl(location)
 	return buf
+}
+
+var curlCache = map[string][]byte{}
+
+func alreadyCached(this js.Value, args []js.Value) interface{} {
+	if len(args) != 1 {
+		logf("alreadyCached: expected 1 arg, got %v", len(args))
+		return nil
+	}
+
+	url := args[0].String()
+	_, ok := curlCache[url]
+	return ok
+}
+
+func saveToCache(this js.Value, args []js.Value) interface{} {
+	if len(args) != 2 {
+		logf("saveToCache: expected 2 args, got %v", len(args))
+		return nil
+	}
+
+	url := args[0].String()
+	body := []byte(args[1].String())
+	curlCache[url] = body
+	return nil
+}
+
+func curl(url string) ([]byte, error) {
+	buf, ok := curlCache[url]
+	if ok {
+		return buf, nil
+	}
+
+	resp, err := http.Get(url)
+	if err != nil {
+		logf("Unable to download source from: %v", url)
+		js.Global().Call("alert", "unable to load source from "+url)
+		return nil, nil
+	}
+	defer resp.Body.Close()
+	buf, err = ioutil.ReadAll(resp.Body)
+	if err != nil {
+		logf("Unable to read response body.")
+		return nil, nil
+	}
+	logf("Read %v bytes from %v", len(buf), url)
+
+	curlCache[url] = buf
+	return buf, nil
+}
+
+var (
+	includeRE = regexp.MustCompile(`^#include\s+"([^"]+)"`)
+)
+
+const (
+	lygiaBaseURL = "https://lygia.xyz"
+	prefix1      = "lygia.xyz/"
+	prefix2      = "lygia/"
+	prefix3      = "github.com/"
+)
+
+func parseIncludeURL(trimmed string) string {
+	m := includeRE.FindStringSubmatch(trimmed)
+	if len(m) < 2 {
+		return ""
+	}
+
+	inc := m[1]
+	if !strings.HasSuffix(inc, ".glsl") {
+		return ""
+	}
+
+	switch {
+	case strings.HasPrefix(inc, prefix1):
+		return fmt.Sprintf("%v/%v", lygiaBaseURL, inc[len(prefix1):])
+	case strings.HasPrefix(inc, prefix2):
+		return fmt.Sprintf("%v/%v", lygiaBaseURL, inc[len(prefix2):])
+	case strings.HasPrefix(inc, prefix3):
+		location := inc[len(prefix3):]
+		location = strings.Replace(location, "/blob/", "/", 1)
+		return githubRawPrefix + location
+	default:
+		return ""
+	}
+}
+
+// processIncludes converts "#include" lines (with recognized prefixes)
+// into their actual source by retrieving them from the internet.
+// Note that multiline comments ("/*" and "*/") are currently not supported.
+// It is recommended that an ignored "#include" statement should be commented-out
+// with single-line comments ("//...").
+func processIncludes(source string) string {
+	lines := strings.Split(source, "\n")
+	var result []string
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if url := parseIncludeURL(trimmed); url != "" {
+			if buf, err := curl(url); err == nil {
+				result = append(result, string(buf))
+			}
+			continue
+		}
+
+		result = append(result, line)
+	}
+
+	return strings.Join(result, "\n")
 }
 
 func clearLog() {
@@ -538,20 +642,19 @@ func logf(fmtStr string, args ...interface{}) {
 const startupShader = `/*{
   irmf: "1.0",
   materials: ["PLA"],
-  max: [5,5,5],
-  min: [-5,-5,-5],
+  max: [10,10,10],
+  min: [0,0,0],
   units: "mm",
 }*/
 
-float sphere(in vec3 pos, in float radius, in vec3 xyz) {
-  xyz -= pos;  // Move sphere into place.
+float sphere(in float radius, in vec3 xyz) {
   float r = length(xyz);
   return r <= radius ? 1.0 : 0.0;
 }
 
 void mainModel4(out vec4 materials, in vec3 xyz ) {
   const float radius = 6.0;
-  materials[0] = 1.0 - sphere(vec3(0), radius, xyz);  // 1.0 represents the cube.
+  materials[0] = 1.0 - sphere(radius, xyz-vec3(5));  // 1.0 represents the cube.
 }
 `
 
