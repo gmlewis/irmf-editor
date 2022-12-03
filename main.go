@@ -23,6 +23,10 @@ var (
 	setResolution js.Value
 )
 
+const (
+	githubRawPrefix = "https://raw.githubusercontent.com/"
+)
+
 func main() {
 	source := loadSource()
 
@@ -493,7 +497,6 @@ func updateJSONOptions(jsonBlob *irmf) {
 
 func loadSource() []byte {
 	const oldPrefix = "/?s=github.com/"
-	const newPrefix = "https://raw.githubusercontent.com/"
 	url := js.Global().Get("document").Get("location").Get("href").String()
 	i := strings.Index(url, oldPrefix)
 	if i < 0 {
@@ -507,7 +510,7 @@ func loadSource() []byte {
 		return nil
 	}
 
-	location = newPrefix + strings.Replace(location, "/blob/", "/", 1)
+	location = githubRawPrefix + strings.Replace(location, "/blob/", "/", 1)
 	buf, _ := curl(location)
 	return buf
 }
@@ -569,6 +572,7 @@ const (
 	lygiaBaseURL = "https://lygia.xyz"
 	prefix1      = "lygia.xyz/"
 	prefix2      = "lygia/"
+	prefix3      = "github.com/"
 )
 
 func parseIncludeURL(trimmed string) string {
@@ -578,11 +582,19 @@ func parseIncludeURL(trimmed string) string {
 	}
 
 	inc := m[1]
+	if !strings.HasSuffix(inc, ".glsl") {
+		return ""
+	}
+
 	switch {
 	case strings.HasPrefix(inc, prefix1):
 		return fmt.Sprintf("%v/%v", lygiaBaseURL, inc[len(prefix1):])
 	case strings.HasPrefix(inc, prefix2):
 		return fmt.Sprintf("%v/%v", lygiaBaseURL, inc[len(prefix2):])
+	case strings.HasPrefix(inc, prefix3):
+		location := inc[len(prefix3):]
+		location = strings.Replace(location, "/blob/", "/", 1)
+		return githubRawPrefix + location
 	default:
 		return ""
 	}

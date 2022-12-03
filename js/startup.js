@@ -192,7 +192,21 @@ const getFile = (url) => {
   return ""
 }
 
-const resolveLygia = (lines) => {
+const includeToUrl = (inc) => {
+  if (inc.startsWith('lygia/')) {
+    return `https://lygia.xyz/${inc.substring(6)}`
+  }
+  if (inc.startsWith('lygia.xyz/')) {
+    return `https://lygia.xyz/${inc.substring(10)}`
+  }
+  if (inc.startsWith('github.com/')) {
+    const noBlob = inc.substring(11).replace(/\/blob\//, '/')
+    return `https://raw.githubusercontent.com/${noBlob}`
+  }
+  return ''
+}
+
+const resolveIncludes = (lines) => {
   if (!Array.isArray(lines)) { lines = lines.split(/\r?\n/) }
 
   lines.forEach((line) => {
@@ -202,8 +216,8 @@ const resolveLygia = (lines) => {
     if (!m) { return }
     const inc = m[1].startsWith('lygia/') ? m[1].substring(6) :
       m[1].startsWith('lygia.xyz/') ? m[1].substring(10) : ''
-    if (!inc) { return }
-    const url = `https://lygia.xyz/${inc}`
+    const url = includeToUrl(m[1])
+    if (!url) { return }
     getFile(url)
   })
 }
@@ -220,7 +234,7 @@ const compileShader = () => {
   decorations = editor.deltaDecorations(decorations, [])
 
   const buf = editor.getValue()
-  resolveLygia(buf)
+  resolveIncludes(buf)
 
   goCompileCallback()
   // Restore cursor:
