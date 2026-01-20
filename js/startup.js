@@ -1251,9 +1251,6 @@ function updateAxes() {
     mainAxesHelper.material.depthTest = !axesParameters.showThrough
     mainAxesHelper.renderOrder = axesParameters.showThrough ? 1000 : 0
   }
-  if (hudAxesHelper) {
-    hudAxesHelper.visible = axesParameters.showAxes
-  }
 
   if (currentLanguage === 'wgsl') {
     if (axesParameters.showThrough) {
