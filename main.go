@@ -902,7 +902,7 @@ func wgslFooter(jsonBlob *irmf) string {
 const wgslFooterFmt4 = `
 @fragment
 fn main(@location(0) v_xyz: vec4<f32>, @location(1) u_d: f32) -> @location(0) vec4<f32> {
-  if (any(v_xyz.xyz < u.ll) || any(v_xyz.xyz > u.ur)) {
+  if (any(v_xyz.xyz < u.ll.xyz) || any(v_xyz.xyz > u.ur.xyz)) {
     return vec4<f32>(0.0);
   }
   let m = mainModel4(v_xyz.xyz);
@@ -913,7 +913,7 @@ fn main(@location(0) v_xyz: vec4<f32>, @location(1) u_d: f32) -> @location(0) ve
 const wgslFooterFmt9 = `
 @fragment
 fn main(@location(0) v_xyz: vec4<f32>, @location(1) u_d: f32) -> @location(0) vec4<f32> {
-  if (any(v_xyz.xyz < u.ll) || any(v_xyz.xyz > u.ur)) {
+  if (any(v_xyz.xyz < u.ll.xyz) || any(v_xyz.xyz > u.ur.xyz)) {
     return vec4<f32>(0.0);
   }
   let m = mainModel9(v_xyz.xyz);
@@ -924,7 +924,7 @@ fn main(@location(0) v_xyz: vec4<f32>, @location(1) u_d: f32) -> @location(0) ve
 const wgslFooterFmt16 = `
 @fragment
 fn main(@location(0) v_xyz: vec4<f32>, @location(1) u_d: f32) -> @location(0) vec4<f32> {
-  if (any(v_xyz.xyz < u.ll) || any(v_xyz.xyz > u.ur)) {
+  if (any(v_xyz.xyz < u.ll.xyz) || any(v_xyz.xyz > u.ur.xyz)) {
     return vec4<f32>(0.0);
   }
   let m = mainModel16(v_xyz.xyz);

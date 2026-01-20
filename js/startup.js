@@ -485,10 +485,8 @@ class WebGPURenderer {
         projectionMatrix: mat4x4<f32>,
         modelViewMatrix: mat4x4<f32>,
         modelMatrix: mat4x4<f32>,
-        ll: vec3<f32>,
-        resolution: f32,
-        ur: vec3<f32>,
-        numMaterials: f32,
+        ll: vec4<f32>,
+        ur: vec4<f32>,
         minD: f32,
         maxD: f32,
         diagonal: f32,
@@ -506,14 +504,14 @@ class WebGPURenderer {
       @vertex
       fn main_vs(@location(0) pos: vec3<f32>, @builtin(instance_index) instanceIdx: u32) -> VertexOutput {
         var out: VertexOutput;
-        let d_step = u.diagonal / max(1.0, u.resolution - 1.0);
+        let d_step = u.diagonal / max(1.0, u.ll.w - 1.0);
         let d = u.minD + f32(instanceIdx) * d_step;
         
         var localPos = vec4<f32>(pos.x * u.diagonal, pos.y * u.diagonal, d, 1.0);
         
         out.pos = u.projectionMatrix * u.modelViewMatrix * localPos;
         out.v_xyz = u.modelMatrix * localPos;
-        out.u_d = f32(instanceIdx) / max(1.0, u.resolution - 1.0);
+        out.u_d = f32(instanceIdx) / max(1.0, u.ll.w - 1.0);
         return out;
       }
 
