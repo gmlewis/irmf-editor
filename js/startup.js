@@ -831,7 +831,8 @@ function rangeValuesChanged() {
   uniforms.u_ur.value.set(urx, ury, urz)
   let maxval = ((urx - llx) > (ury - lly)) ? (urx - llx) : (ury - lly)
   maxval = (maxval > (urz - llz)) ? maxval : (urz - llz)
-  resetCameraD = maxval
+  const fs = 0.542 // Matches the value used in commonViewCalc for "nice" framing.
+  resetCameraD = 0.5 * maxval / fs
   // console.log('rangeValuesChanged: resetCameraD=' + resetCameraD.toString());
 
   const ll = new THREE.Vector3(llx, lly, llz)
@@ -922,12 +923,9 @@ function commonViewCalc(left, right, top, bottom) {
   let height = (top - bottom)
   const fs = 0.542  // This value matches nicely with the orthographic view.
   frustumSize = fs * height
-  resetCameraD = 0.5 * height
   if (frustumSize * aspectRatio < fs * width) {
     frustumSize = fs * width / aspectRatio
-    resetCameraD = 0.5 * width
   }
-  console.log('commonViewCalc: aspectRatio=' + aspectRatio.toString() + ', width=' + width.toString() + ', height=' + height.toString() + ', frustumSize=' + frustumSize.toString() + ', resetCameraD=' + resetCameraD.toString())
   return {
     left: -aspectRatio * frustumSize,
     right: aspectRatio * frustumSize,
