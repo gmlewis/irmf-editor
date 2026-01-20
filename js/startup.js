@@ -5,6 +5,16 @@
 Split(['#one', '#two'])
 const twoDiv = document.getElementById('two')
 
+const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0
+const recompileMessage = document.getElementById('recompile-message')
+if (recompileMessage) {
+  if (isMac) {
+    recompileMessage.innerText = 'Hit Cmd-Enter to recompile IRMF shader.'
+  } else {
+    recompileMessage.innerText = 'Hit Ctrl-Enter to recompile IRMF shader.'
+  }
+}
+
 // Get canvases
 /** @type {HTMLCanvasElement} */
 const canvas = document.getElementById('canvas')
