@@ -1172,24 +1172,27 @@ function onCanvasClick(evt) {
     y = evt.clientY
   }
   let array = getMousePosition(canvas, x, y)
-  if (array[0] < 0. || array[1] > 1.) { return }
-
-  evt.preventDefault()
-  onClickPosition.fromArray(array)
-  let intersects = getIntersects(onClickPosition, hud.children)
-  for (let i = 0; i < intersects.length; i++) {
-    const intersect = intersects[i]
-    if (!intersect.uv || intersect.object.type !== 'Mesh') { continue }
-    let clickCallback = clickCallbacksByUUID[intersect.object.uuid]
-    if (clickCallback) {
-      clickCallback()
-      return false
+  if (array[0] >= 0. && array[0] <= 1. && array[1] >= 0. && array[1] <= 1.) {
+    evt.preventDefault()
+    onClickPosition.fromArray(array)
+    let intersects = getIntersects(onClickPosition, hud.children)
+    for (let i = 0; i < intersects.length; i++) {
+      const intersect = intersects[i]
+      if (!intersect.uv || intersect.object.type !== 'Mesh') { continue }
+      let clickCallback = clickCallbacksByUUID[intersect.object.uuid]
+      if (clickCallback) {
+        clickCallback()
+        return false
+      }
     }
   }
 
   const isLeftClick = evt.button === 0
   const isTouch = evt.touches && evt.touches.length === 1
   if (activeCamera.isOrthographicCamera && (isLeftClick || isTouch)) {
+    let p = getLookAt()
+    controls.target.set(p[0], p[1], p[2])
+    controls.update()
     toPersp()
   }
 
