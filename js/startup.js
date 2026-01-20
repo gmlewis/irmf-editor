@@ -26,7 +26,8 @@ if (!gl) {
   console.log('Browser does not support WebGL2!')
 }
 
-const FRUSTUM_SIZE_FACTOR = 0.6194 // Matches nicely with the 75 degree FOV.
+const fov = 75.0
+const FRUSTUM_SIZE_FACTOR = 0.542 // Safe value that keeps camera outside model bounding sphere.
 
 // Set up GUI:
 const gui = new dat.GUI({ name: 'IRMF Editor', autoPlace: false })
@@ -444,7 +445,6 @@ let fullViewport = new THREE.Vector4()
 let hudViewport = new THREE.Vector4()
 const hudSize = 256
 
-const fov = 75.0
 let aspectRatio = canvas.width / canvas.height
 console.log('canvas: (' + canvas.width.toString() + ',' + canvas.height.toString() + '), aspectRatio=' + aspectRatio.toString())
 let activeCamera = null
@@ -822,6 +822,8 @@ function uniformsChanged() {
   rangeValuesChanged()
 }
 let mainAxesHelper = null
+let modelRadius = 1.0
+
 function rangeValuesChanged() {
   const llx = rangeValues.llx
   const lly = rangeValues.lly
@@ -829,17 +831,26 @@ function rangeValuesChanged() {
   const urx = rangeValues.urx
   const ury = rangeValues.ury
   const urz = rangeValues.urz
+  console.log('rangeValuesChanged: ll=', llx, lly, llz, 'ur=', urx, ury, urz);
   uniforms.u_ll.value.set(llx, lly, llz)
   uniforms.u_ur.value.set(urx, ury, urz)
-  let maxval = ((urx - llx) > (ury - lly)) ? (urx - llx) : (ury - lly)
-  maxval = (maxval > (urz - llz)) ? maxval : (urz - llz)
-  resetCameraD = 0.5 * maxval / FRUSTUM_SIZE_FACTOR
-  // console.log('rangeValuesChanged: resetCameraD=' + resetCameraD.toString());
-
+  
   const ll = new THREE.Vector3(llx, lly, llz)
   const ur = new THREE.Vector3(urx, ury, urz)
   const lookAt = getLookAt()
   const center = new THREE.Vector3(lookAt[0], lookAt[1], lookAt[2])
+  
+  modelRadius = ll.distanceTo(ur) / 2.0
+  if (modelRadius <= 0) modelRadius = 1.0
+  
+  // Hero zoom: Distance where the bounding sphere perfectly fits the vertical FOV.
+  resetCameraD = modelRadius / Math.tan(fov * Math.PI / 360)
+  
+  console.log('rangeValuesChanged: modelRadius=', modelRadius, 'resetCameraD=', resetCameraD);
+
+  controls.target.copy(center)
+  controls.target0.copy(center)
+  console.log('rangeValuesChanged: controls.target=', controls.target);
   const minD = -(new THREE.Vector3().subVectors(center, ll)).length()
   const maxD = (new THREE.Vector3().subVectors(ur, center)).length()
   let diagonal = maxD - minD
@@ -902,36 +913,39 @@ const viewRotations = [[0, halfPi, 0], [0, -halfPi, 0], [-halfPi, 0, 0], [halfPi
 [quarterPi, 0, quarterPi, 'ZYX'], [-quarterPi, 0, -quarterPi, 'ZYX'], [-quarterPi, 0, quarterPi, 'ZYX'], [quarterPi, 0, -quarterPi, 'ZYX'],
 [-quarterPi, 0, quarterPi, 'ZYX'], [quarterPi, 0, -quarterPi, 'ZYX'], [quarterPi, 0, quarterPi, 'ZYX'], [-quarterPi, 0, -quarterPi, 'ZYX']]
 const viewCallbacks = [
-  function () { toOrtho(rightView); let p = getLookAt(); controls.position0.set(p[0] + resetCameraD, p[1] + 0, p[2] + 0); controls.up0.set(0, 0, 1); controls.reset() },  // right
-  function () { toOrtho(leftView); let p = getLookAt(); controls.position0.set(p[0] + -resetCameraD, p[1] + 0, p[2] + 0); controls.up0.set(0, 0, 1); controls.reset() },  // left
-  function () { toOrtho(backView); let p = getLookAt(); controls.position0.set(p[0] + 0, p[1] + resetCameraD, p[2] + 0); controls.up0.set(0, 0, 1); controls.reset() },  // back
-  function () { toOrtho(frontView); let p = getLookAt(); controls.position0.set(p[0] + 0, p[1] + -resetCameraD, p[2] + 0); controls.up0.set(0, 0, 1); controls.reset() },  // front
-  function () { toOrtho(topView); let p = getLookAt(); controls.position0.set(p[0] + 0, p[1] + 0, p[2] + resetCameraD); controls.up0.set(0, 1, 0); controls.reset() },  // top
-  function () { toOrtho(bottomView); let p = getLookAt(); controls.position0.set(p[0] + 0, p[1] + 0, p[2] + -resetCameraD); controls.up0.set(0, -1, 0); controls.reset() }, // bottom
-  function () { toPersp(); let p = getLookAt(); controls.position0.set(p[0] + resetCameraD, p[1] + -resetCameraD, p[2] + resetCameraD); controls.up0.set(0, 0, 1); controls.reset() },
-  function () { toPersp(); let p = getLookAt(); controls.position0.set(p[0] + resetCameraD, p[1] + resetCameraD, p[2] + resetCameraD); controls.up0.set(0, 0, 1); controls.reset() },
-  function () { toPersp(); let p = getLookAt(); controls.position0.set(p[0] + -resetCameraD, p[1] + resetCameraD, p[2] + resetCameraD); controls.up0.set(0, 0, 1); controls.reset() },
-  function () { toPersp(); let p = getLookAt(); controls.position0.set(p[0] + -resetCameraD, p[1] + -resetCameraD, p[2] + resetCameraD); controls.up0.set(0, 0, 1); controls.reset() },
-  function () { toPersp(); let p = getLookAt(); controls.position0.set(p[0] + resetCameraD, p[1] + -resetCameraD, p[2] + -resetCameraD); controls.up0.set(0, 0, 1); controls.reset() },
-  function () { toPersp(); let p = getLookAt(); controls.position0.set(p[0] + resetCameraD, p[1] + resetCameraD, p[2] + -resetCameraD); controls.up0.set(0, 0, 1); controls.reset() },
-  function () { toPersp(); let p = getLookAt(); controls.position0.set(p[0] + -resetCameraD, p[1] + resetCameraD, p[2] + -resetCameraD); controls.up0.set(0, 0, 1); controls.reset() },
-  function () { toPersp(); let p = getLookAt(); controls.position0.set(p[0] + -resetCameraD, p[1] + -resetCameraD, p[2] + -resetCameraD); controls.up0.set(0, 0, 1); controls.reset() }
+  function () { toOrtho(rightView); let p = getLookAt(); controls.target0.set(p[0], p[1], p[2]); controls.position0.set(p[0] + resetCameraD, p[1] + 0, p[2] + 0); controls.up0.set(0, 0, 1); controls.reset() },  // right
+  function () { toOrtho(leftView); let p = getLookAt(); controls.target0.set(p[0], p[1], p[2]); controls.position0.set(p[0] + -resetCameraD, p[1] + 0, p[2] + 0); controls.up0.set(0, 0, 1); controls.reset() },  // left
+  function () { toOrtho(backView); let p = getLookAt(); controls.target0.set(p[0], p[1], p[2]); controls.position0.set(p[0] + 0, p[1] + resetCameraD, p[2] + 0); controls.up0.set(0, 0, 1); controls.reset() },  // back
+  function () { toOrtho(frontView); let p = getLookAt(); controls.target0.set(p[0], p[1], p[2]); controls.position0.set(p[0] + 0, p[1] + -resetCameraD, p[2] + 0); controls.up0.set(0, 0, 1); controls.reset() },  // front
+  function () { toOrtho(topView); let p = getLookAt(); controls.target0.set(p[0], p[1], p[2]); controls.position0.set(p[0] + 0, p[1] + 0, p[2] + resetCameraD); controls.up0.set(0, 1, 0); controls.reset() },  // top
+  function () { toOrtho(bottomView); let p = getLookAt(); controls.target0.set(p[0], p[1], p[2]); controls.position0.set(p[0] + 0, p[1] + 0, p[2] + -resetCameraD); controls.up0.set(0, -1, 0); controls.reset() }, // bottom
+  function () { toPersp(); let p = getLookAt(); controls.target0.set(p[0], p[1], p[2]); controls.position0.set(p[0] + resetCameraD, p[1] + -resetCameraD, p[2] + resetCameraD); controls.up0.set(0, 0, 1); controls.reset() },
+  function () { toPersp(); let p = getLookAt(); controls.target0.set(p[0], p[1], p[2]); controls.position0.set(p[0] + resetCameraD, p[1] + resetCameraD, p[2] + resetCameraD); controls.up0.set(0, 0, 1); controls.reset() },
+  function () { toPersp(); let p = getLookAt(); controls.target0.set(p[0], p[1], p[2]); controls.position0.set(p[0] + -resetCameraD, p[1] + resetCameraD, p[2] + resetCameraD); controls.up0.set(0, 0, 1); controls.reset() },
+  function () { toPersp(); let p = getLookAt(); controls.target0.set(p[0], p[1], p[2]); controls.position0.set(p[0] + -resetCameraD, p[1] + -resetCameraD, p[2] + resetCameraD); controls.up0.set(0, 0, 1); controls.reset() },
+  function () { toPersp(); let p = getLookAt(); controls.target0.set(p[0], p[1], p[2]); controls.position0.set(p[0] + resetCameraD, p[1] + -resetCameraD, p[2] + -resetCameraD); controls.up0.set(0, 0, 1); controls.reset() },
+  function () { toPersp(); let p = getLookAt(); controls.target0.set(p[0], p[1], p[2]); controls.position0.set(p[0] + resetCameraD, p[1] + resetCameraD, p[2] + -resetCameraD); controls.up0.set(0, 0, 1); controls.reset() },
+  function () { toPersp(); let p = getLookAt(); controls.target0.set(p[0], p[1], p[2]); controls.position0.set(p[0] + -resetCameraD, p[1] + resetCameraD, p[2] + -resetCameraD); controls.up0.set(0, 0, 1); controls.reset() },
+  function () { toPersp(); let p = getLookAt(); controls.target0.set(p[0], p[1], p[2]); controls.position0.set(p[0] + -resetCameraD, p[1] + -resetCameraD, p[2] + -resetCameraD); controls.up0.set(0, 0, 1); controls.reset() }
 ]
 
 function commonViewCalc(left, right, top, bottom) {
   aspectRatio = canvas.width / canvas.height
+  console.log('commonViewCalc: canvas=', canvas.width, canvas.height, 'aspectRatio=', aspectRatio);
   let width = (right - left)
   let height = (top - bottom)
   frustumSize = FRUSTUM_SIZE_FACTOR * height
   if (frustumSize * aspectRatio < FRUSTUM_SIZE_FACTOR * width) {
     frustumSize = FRUSTUM_SIZE_FACTOR * width / aspectRatio
   }
-  return {
+  const res = {
     left: -aspectRatio * frustumSize,
     right: aspectRatio * frustumSize,
     top: frustumSize,
     bottom: -frustumSize
   }
+  console.log('commonViewCalc: width=', width, 'height=', height, 'frustumSize=', frustumSize, 'res=', res);
+  return res
 }
 function rightView() {
   // console.log('rightView');
@@ -1115,6 +1129,7 @@ onCanvasResize()
 animate()
 
 function toOrtho(getViewport) {
+  console.log('--- toOrtho START ---');
   const viewport = getViewport()
   cameraOrthographic.position.copy(cameraPerspective.position)
   cameraOrthographic.up.copy(cameraPerspective.up)
@@ -1129,28 +1144,37 @@ function toOrtho(getViewport) {
   activeCamera = cameraOrthographic
   controls.object = activeCamera
   hudActiveCamera = hudCameraOrthographic
+  console.log('toOrtho: pos=', cameraOrthographic.position.x, cameraOrthographic.position.y, cameraOrthographic.position.z);
+  console.log('toOrtho: target=', controls.target.x, controls.target.y, controls.target.z);
+  console.log('toOrtho: frustum=', cameraOrthographic.left, cameraOrthographic.right, cameraOrthographic.top, cameraOrthographic.bottom);
   render()
 }
 function toPersp(matchOrtho) {
+  console.log('--- toPersp START (matchOrtho=' + matchOrtho + ') ---');
+  cameraPerspective.fov = fov
   if (matchOrtho) {
     const eye = new THREE.Vector3().subVectors(cameraOrthographic.position, controls.target)
     const orthoHeight = (cameraOrthographic.top - cameraOrthographic.bottom) / cameraOrthographic.zoom
-    const currentDistance = eye.length()
+    
+    // Calculate the distance needed to match the ortho scale.
+    // We add an offset (half the model radius) to ensure we're looking at the face 
+    // from a safe distance, matching the scale at that forward plane.
+    const requiredDistance = (orthoHeight / (2 * Math.tan(cameraPerspective.fov * Math.PI / 360))) + (modelRadius * 0.5)
 
-    if (currentDistance > 0.000001) {
-      // Match the FOV to the current ortho view at the current distance.
-      // This ensures the size matches perfectly without moving the camera,
-      // which prevents jumping inside the model.
-      const matchedFov = 2 * Math.atan(orthoHeight / (2 * currentDistance)) * 180 / Math.PI
-      cameraPerspective.fov = matchedFov
-      cameraPerspective.position.copy(cameraOrthographic.position)
+    console.log('toPersp: currentDist=', eye.length(), 'orthoHeight=', orthoHeight, 'requiredDist=', requiredDistance);
+
+    if (eye.lengthSq() < 0.000001) {
+      cameraPerspective.position.set(requiredDistance, -requiredDistance, requiredDistance).add(controls.target)
     } else {
-      cameraPerspective.fov = fov
-      cameraPerspective.position.set(resetCameraD, -resetCameraD, resetCameraD).add(controls.target)
+      eye.setLength(requiredDistance)
+      cameraPerspective.position.copy(controls.target).add(eye)
     }
   } else {
-    cameraPerspective.fov = fov
-    cameraPerspective.position.copy(cameraOrthographic.position)
+    const eye = new THREE.Vector3().subVectors(cameraOrthographic.position, controls.target)
+    if (eye.length() < resetCameraD) {
+      eye.setLength(resetCameraD)
+    }
+    cameraPerspective.position.copy(controls.target).add(eye)
   }
 
   cameraPerspective.up.copy(cameraOrthographic.up)
@@ -1158,6 +1182,7 @@ function toPersp(matchOrtho) {
   activeCamera = cameraPerspective
   controls.object = activeCamera
   hudActiveCamera = hudCameraPerspective
+  console.log('toPersp: finalPos=', cameraPerspective.position.x, cameraPerspective.position.y, cameraPerspective.position.z);
   render()
 }
 
@@ -1220,6 +1245,7 @@ function onCanvasClick(evt) {
   const isLeftClick = evt.button === 0
   const isTouch = evt.touches && evt.touches.length === 1
   if (activeCamera.isOrthographicCamera && (isLeftClick || isTouch)) {
+    console.log('onCanvasClick: switching to perspective');
     // Switch to perspective mode and match the current ortho zoom/view exactly.
     toPersp(true)
     controls.update()
