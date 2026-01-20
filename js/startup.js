@@ -1174,6 +1174,11 @@ function onCanvasClick(evt) {
       return false
     }
   }
+
+  if (activeCamera === cameraOrthographic && evt.button === 0) {
+    toPersp()
+  }
+
   return true
 }
 function onCanvasResize() {

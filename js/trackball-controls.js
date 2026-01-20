@@ -209,7 +209,7 @@ THREE.TrackballControls = function (object, domElement) {
       }
     }
     if (_this.object.isOrthographicCamera) {
-      _this.object.zoom = _this.position0.length() / _eye.length();
+      _this.object.zoom = _this.distance0 / _eye.length();
       _this.object.updateProjectionMatrix();
     }
   };
@@ -302,6 +302,8 @@ THREE.TrackballControls = function (object, domElement) {
 
   };
 
+  this.distance0 = 1.0;
+
   this.reset = function () {
 
     _state = STATE.NONE;
@@ -312,6 +314,7 @@ THREE.TrackballControls = function (object, domElement) {
     _this.object.up.copy(_this.up0);
 
     _eye.subVectors(_this.object.position, _this.target);
+    _this.distance0 = _eye.length() || 1.0;
 
     _this.object.lookAt(_this.target);
 
