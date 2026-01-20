@@ -1122,7 +1122,18 @@ function toOrtho(getViewport) {
   render()
 }
 function toPersp() {
-  cameraPerspective.position.copy(cameraOrthographic.position)
+  const eye = new THREE.Vector3().subVectors(cameraOrthographic.position, controls.target)
+  const orthoHeight = (cameraOrthographic.top - cameraOrthographic.bottom) / cameraOrthographic.zoom
+  const fvRad = fov * Math.PI / 180
+  const requiredDistance = orthoHeight / (2 * Math.tan(fvRad / 2))
+
+  if (eye.lengthSq() < 0.000001) {
+    eye.set(1, -1, 1).setLength(requiredDistance)
+  } else {
+    eye.setLength(requiredDistance)
+  }
+
+  cameraPerspective.position.copy(controls.target).add(eye)
   cameraPerspective.up.copy(cameraOrthographic.up)
   cameraPerspective.updateProjectionMatrix()
   activeCamera = cameraPerspective
