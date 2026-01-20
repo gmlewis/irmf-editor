@@ -61,8 +61,8 @@ resolutionFolder.add(resolutionParameters, 'res1024').name('1024').listen().onCh
 resolutionFolder.add(resolutionParameters, 'res2048').name('2048').listen().onChange(function () { setResolution(2048); goJSONOptionsCallback(); uniformsChanged(); render() })
 
 let axesFolder = gui.addFolder("Axes")
-axesFolder.add(axesParameters, 'showAxes').name('Show Axes').onChange(render)
-axesFolder.add(axesParameters, 'showThrough').name('Show Through').onChange(render)
+axesFolder.add(axesParameters, 'showAxes').name('Show Axes').onChange(function () { updateAxes(); render() })
+axesFolder.add(axesParameters, 'showThrough').name('Show Through').onChange(function () { updateAxes(); render() })
 function setChecked(prop) {
   for (let param in resolutionParameters) {
     resolutionParameters[param] = false
@@ -775,6 +775,7 @@ async function loadNewModel(source, language) {
     await webgpuRenderer.loadNewModel(source)
   }
   uniformsChanged()
+  updateAxes()
 
   const newBBox = {
     min: [rangeValues.minx, rangeValues.miny, rangeValues.minz],
@@ -849,6 +850,7 @@ function rangeValuesChanged() {
   // TODO: make this a GUI option?
   mainAxesHelper = new THREE.AxesHelper(diagonal)
   mainAxesHelper.visible = axesParameters.showAxes
+  mainAxesHelper.material.transparent = axesParameters.showThrough
   mainAxesHelper.material.depthTest = !axesParameters.showThrough
   mainAxesHelper.renderOrder = axesParameters.showThrough ? 1000 : 0
   scene.add(mainAxesHelper)
@@ -1244,6 +1246,8 @@ function checkCompilerErrors() {
 function updateAxes() {
   if (mainAxesHelper) {
     mainAxesHelper.visible = axesParameters.showAxes
+    // For GLSL mode, we use transparency and renderOrder to show through in a single pass
+    mainAxesHelper.material.transparent = axesParameters.showThrough
     mainAxesHelper.material.depthTest = !axesParameters.showThrough
     mainAxesHelper.renderOrder = axesParameters.showThrough ? 1000 : 0
   }
@@ -1267,7 +1271,6 @@ function updateAxes() {
 }
 
 function render() {
-  updateAxes()
   if (modelCentroidNull != null) {
     modelCentroidNull.lookAt(activeCamera.position)
     modelCentroidNull.updateMatrixWorld()
