@@ -1178,11 +1178,10 @@ function onCanvasClick(evt) {
 }
 function onCanvasResize() {
   const aspectRatio = canvas.width / canvas.height
-  const currentFrustumSize = cameraOrthographic.top
-  cameraOrthographic.left = -aspectRatio * currentFrustumSize
-  cameraOrthographic.right = aspectRatio * currentFrustumSize
-  cameraOrthographic.top = currentFrustumSize
-  cameraOrthographic.bottom = -currentFrustumSize
+  cameraOrthographic.left = -aspectRatio * frustumSize
+  cameraOrthographic.right = aspectRatio * frustumSize
+  cameraOrthographic.top = frustumSize
+  cameraOrthographic.bottom = -frustumSize
   cameraOrthographic.updateProjectionMatrix()
   cameraPerspective.aspect = aspectRatio
   cameraPerspective.updateProjectionMatrix()

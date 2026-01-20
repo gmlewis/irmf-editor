@@ -192,62 +192,26 @@ THREE.TrackballControls = function (object, domElement) {
 
 
   this.zoomCamera = function () {
-
     var factor;
-
     if (_state === STATE.TOUCH_ZOOM_PAN) {
-
       factor = _touchZoomDistanceStart / _touchZoomDistanceEnd;
       _touchZoomDistanceStart = _touchZoomDistanceEnd;
-
-      if (_this.object instanceof THREE.OrthographicCamera) {
-
-        _this.object.left *= factor;
-        _this.object.right *= factor;
-        _this.object.top *= factor;
-        _this.object.bottom *= factor;
-        _this.object.updateProjectionMatrix();
-
-      } else {
-
-        _eye.multiplyScalar(factor);
-
-      }
-
+      _eye.multiplyScalar(factor);
     } else {
-
       factor = 1.0 + (_zoomEnd.y - _zoomStart.y) * _this.zoomSpeed;
-
       if (factor !== 1.0 && factor > 0.0) {
-
-        if (_this.object instanceof THREE.OrthographicCamera) {
-
-          _this.object.left *= factor;
-          _this.object.right *= factor;
-          _this.object.top *= factor;
-          _this.object.bottom *= factor;
-          _this.object.updateProjectionMatrix();
-
-        } else {
-
-          _eye.multiplyScalar(factor);
-
-        }
-
+        _eye.multiplyScalar(factor);
       }
-
       if (_this.staticMoving) {
-
         _zoomStart.copy(_zoomEnd);
-
       } else {
-
         _zoomStart.y += (_zoomEnd.y - _zoomStart.y) * this.dynamicDampingFactor;
-
       }
-
     }
-
+    if (_this.object.isOrthographicCamera) {
+      _this.object.zoom = _this.position0.length() / _eye.length();
+      _this.object.updateProjectionMatrix();
+    }
   };
 
   this.panCamera = (function () {
@@ -257,39 +221,23 @@ THREE.TrackballControls = function (object, domElement) {
         pan = new THREE.Vector3();
 
     return function panCamera() {
-
       mouseChange.copy(_panEnd).sub(_panStart);
-
       if (mouseChange.lengthSq()) {
-
-        if (_this.object instanceof THREE.OrthographicCamera) {
-
-          mouseChange.multiplyScalar((_this.object.right - _this.object.left) * _this.panSpeed);
-
+        if (_this.object.isOrthographicCamera) {
+          mouseChange.multiplyScalar((_this.object.right - _this.object.left) / _this.object.zoom * _this.panSpeed);
         } else {
-
           mouseChange.multiplyScalar(_eye.length() * _this.panSpeed);
-
         }
-
         pan.copy(_eye).cross(_this.object.up).setLength(mouseChange.x);
         pan.add(objectUp.copy(_this.object.up).setLength(mouseChange.y));
-
         _this.object.position.add(pan);
         _this.target.add(pan);
-
         if (_this.staticMoving) {
-
           _panStart.copy(_panEnd);
-
         } else {
-
           _panStart.add(mouseChange.subVectors(_panEnd, _panStart).multiplyScalar(_this.dynamicDampingFactor));
-
         }
-
       }
-
     };
 
   }());
