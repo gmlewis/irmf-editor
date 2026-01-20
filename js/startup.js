@@ -26,6 +26,8 @@ if (!gl) {
   console.log('Browser does not support WebGL2!')
 }
 
+const FRUSTUM_SIZE_FACTOR = 0.542 // Matches nicely with the orthographic view.
+
 // Set up GUI:
 const gui = new dat.GUI({ name: 'IRMF Editor', autoPlace: false })
 gui.domElement.id = 'gui'
@@ -831,8 +833,7 @@ function rangeValuesChanged() {
   uniforms.u_ur.value.set(urx, ury, urz)
   let maxval = ((urx - llx) > (ury - lly)) ? (urx - llx) : (ury - lly)
   maxval = (maxval > (urz - llz)) ? maxval : (urz - llz)
-  const fs = 0.542 // Matches the value used in commonViewCalc for "nice" framing.
-  resetCameraD = 0.5 * maxval / fs
+  resetCameraD = 0.5 * maxval / FRUSTUM_SIZE_FACTOR
   // console.log('rangeValuesChanged: resetCameraD=' + resetCameraD.toString());
 
   const ll = new THREE.Vector3(llx, lly, llz)
@@ -921,10 +922,9 @@ function commonViewCalc(left, right, top, bottom) {
   aspectRatio = canvas.width / canvas.height
   let width = (right - left)
   let height = (top - bottom)
-  const fs = 0.542  // This value matches nicely with the orthographic view.
-  frustumSize = fs * height
-  if (frustumSize * aspectRatio < fs * width) {
-    frustumSize = fs * width / aspectRatio
+  frustumSize = FRUSTUM_SIZE_FACTOR * height
+  if (frustumSize * aspectRatio < FRUSTUM_SIZE_FACTOR * width) {
+    frustumSize = FRUSTUM_SIZE_FACTOR * width / aspectRatio
   }
   return {
     left: -aspectRatio * frustumSize,
@@ -1136,12 +1136,13 @@ function toPersp() {
   const requiredDistance = orthoHeight / (2 * Math.tan(fvRad / 2))
 
   if (eye.lengthSq() < 0.000001) {
-    eye.set(1, -1, 1).setLength(requiredDistance)
+    // If we're somehow at the target, move to a default perspective offset.
+    cameraPerspective.position.set(requiredDistance, -requiredDistance, requiredDistance).add(controls.target)
   } else {
     eye.setLength(requiredDistance)
+    cameraPerspective.position.copy(controls.target).add(eye)
   }
 
-  cameraPerspective.position.copy(controls.target).add(eye)
   cameraPerspective.up.copy(cameraOrthographic.up)
   cameraPerspective.updateProjectionMatrix()
   activeCamera = cameraPerspective
@@ -1209,10 +1210,12 @@ function onCanvasClick(evt) {
   const isLeftClick = evt.button === 0
   const isTouch = evt.touches && evt.touches.length === 1
   if (activeCamera.isOrthographicCamera && (isLeftClick || isTouch)) {
-    let p = getLookAt()
+    const p = getLookAt()
     controls.target.set(p[0], p[1], p[2])
-    controls.update()
     toPersp()
+    // By calling update() after toPersp(), TrackballControls syncs its internal _eye
+    // with the newly positioned cameraPerspective.position.
+    controls.update()
   }
 
   return true
