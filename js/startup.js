@@ -1113,6 +1113,7 @@ function toOrtho(getViewport) {
   cameraOrthographic.right = viewport.right
   cameraOrthographic.top = viewport.top
   cameraOrthographic.bottom = viewport.bottom
+  cameraOrthographic.zoom = 1.0
   cameraOrthographic.updateProjectionMatrix()
   activeCamera = cameraOrthographic
   controls.object = activeCamera
@@ -1177,10 +1178,11 @@ function onCanvasClick(evt) {
 }
 function onCanvasResize() {
   const aspectRatio = canvas.width / canvas.height
-  cameraOrthographic.left = -aspectRatio * frustumSize
-  cameraOrthographic.right = aspectRatio * frustumSize
-  cameraOrthographic.top = frustumSize
-  cameraOrthographic.bottom = -frustumSize
+  const currentFrustumSize = cameraOrthographic.top
+  cameraOrthographic.left = -aspectRatio * currentFrustumSize
+  cameraOrthographic.right = aspectRatio * currentFrustumSize
+  cameraOrthographic.top = currentFrustumSize
+  cameraOrthographic.bottom = -currentFrustumSize
   cameraOrthographic.updateProjectionMatrix()
   cameraPerspective.aspect = aspectRatio
   cameraPerspective.updateProjectionMatrix()

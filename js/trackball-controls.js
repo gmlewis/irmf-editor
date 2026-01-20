@@ -199,7 +199,20 @@ THREE.TrackballControls = function (object, domElement) {
 
       factor = _touchZoomDistanceStart / _touchZoomDistanceEnd;
       _touchZoomDistanceStart = _touchZoomDistanceEnd;
-      _eye.multiplyScalar(factor);
+
+      if (_this.object instanceof THREE.OrthographicCamera) {
+
+        _this.object.left *= factor;
+        _this.object.right *= factor;
+        _this.object.top *= factor;
+        _this.object.bottom *= factor;
+        _this.object.updateProjectionMatrix();
+
+      } else {
+
+        _eye.multiplyScalar(factor);
+
+      }
 
     } else {
 
@@ -207,7 +220,19 @@ THREE.TrackballControls = function (object, domElement) {
 
       if (factor !== 1.0 && factor > 0.0) {
 
-        _eye.multiplyScalar(factor);
+        if (_this.object instanceof THREE.OrthographicCamera) {
+
+          _this.object.left *= factor;
+          _this.object.right *= factor;
+          _this.object.top *= factor;
+          _this.object.bottom *= factor;
+          _this.object.updateProjectionMatrix();
+
+        } else {
+
+          _eye.multiplyScalar(factor);
+
+        }
 
       }
 
@@ -237,7 +262,15 @@ THREE.TrackballControls = function (object, domElement) {
 
       if (mouseChange.lengthSq()) {
 
-        mouseChange.multiplyScalar(_eye.length() * _this.panSpeed);
+        if (_this.object instanceof THREE.OrthographicCamera) {
+
+          mouseChange.multiplyScalar((_this.object.right - _this.object.left) * _this.panSpeed);
+
+        } else {
+
+          mouseChange.multiplyScalar(_eye.length() * _this.panSpeed);
+
+        }
 
         pan.copy(_eye).cross(_this.object.up).setLength(mouseChange.x);
         pan.add(objectUp.copy(_this.object.up).setLength(mouseChange.y));
