@@ -854,19 +854,19 @@ function rangeValuesChanged() {
   mainAxesHelper.renderOrder = axesParameters.showThrough ? 1000 : 0
   scene.add(mainAxesHelper)
 
-  if (activeRenderer === renderer) {
-    const dStep = diagonal / Math.max(1.0, uniforms.u_resolution.value - 1.0)
-    for (let i = 0; i < uniforms.u_resolution.value; i++) {
-      let d = minD + i * dStep
-      let myUniforms = copyUniforms()
-      myUniforms.u_d.value = i / Math.max(1.0, uniforms.u_resolution.value - 1.0)
-      // console.log('d=' + d.toString() + ', u_d=' + myUniforms.u_d.value.toString());
-      let material = new THREE.ShaderMaterial({ uniforms: myUniforms, vertexShader: vs, fragmentShader: fsHeader + compilerSource, side: THREE.DoubleSide, transparent: true })
-      let plane = new THREE.PlaneBufferGeometry(diagonal, diagonal)  // Should this always fill the viewport?
-      let mesh = new THREE.Mesh(plane, material)
-      mesh.position.set(0, 0, d)
-      modelCentroidNull.add(mesh)
-    }
+  if (activeRenderer !== renderer) { return }
+
+  const dStep = diagonal / Math.max(1.0, uniforms.u_resolution.value - 1.0)
+  for (let i = 0; i < uniforms.u_resolution.value; i++) {
+    let d = minD + i * dStep
+    let myUniforms = copyUniforms()
+    myUniforms.u_d.value = i / Math.max(1.0, uniforms.u_resolution.value - 1.0)
+    // console.log('d=' + d.toString() + ', u_d=' + myUniforms.u_d.value.toString());
+    let material = new THREE.ShaderMaterial({ uniforms: myUniforms, vertexShader: vs, fragmentShader: fsHeader + compilerSource, side: THREE.DoubleSide, transparent: true })
+    let plane = new THREE.PlaneBufferGeometry(diagonal, diagonal)  // Should this always fill the viewport?
+    let mesh = new THREE.Mesh(plane, material)
+    mesh.position.set(0, 0, d)
+    modelCentroidNull.add(mesh)
   }
 }
 
