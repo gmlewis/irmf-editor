@@ -5,9 +5,12 @@
 Split(['#one', '#two'])
 const twoDiv = document.getElementById('two')
 
-// Get A WebGL context
+// Get canvases
 /** @type {HTMLCanvasElement} */
 const canvas = document.getElementById('canvas')
+/** @type {HTMLCanvasElement} */
+const gpuCanvas = document.getElementById('gpu-canvas')
+
 const gl = canvas.getContext('webgl2')
 if (!gl) {
   console.log('Browser does not support WebGL2!')
@@ -306,6 +309,38 @@ require(["vs/editor/editor.main"], function () {
       { open: '\'', close: '\'' },
     ]
   })
+
+  // Register WGSL
+  monaco.languages.register({ id: 'wgsl' })
+  monaco.languages.setMonarchTokensProvider('wgsl', wgsl)
+  monaco.languages.setLanguageConfiguration('wgsl', {
+    comments: {
+      lineComment: '//',
+      blockComment: ['/*', '*/'],
+    },
+    brackets: [
+      ['{', '}'],
+      ['[', ']'],
+      ['(', ')']
+    ],
+    autoClosingPairs: [
+      { open: '{', close: '}' },
+      { open: '[', close: ']' },
+      { open: '(', close: ')' },
+      { open: '`', close: '`', notIn: ['string'] },
+      { open: '"', close: '"', notIn: ['string'] },
+      { open: '\'', close: '\'', notIn: ['string', 'comment'] },
+    ],
+    surroundingPairs: [
+      { open: '{', close: '}' },
+      { open: '[', close: ']' },
+      { open: '(', close: ')' },
+      { open: '`', close: '`' },
+      { open: '"', close: '"' },
+      { open: '\'', close: '\'' },
+    ]
+  })
+
   editor = monaco.editor.create(document.getElementById('one'), {
     value: '',
     language: 'glsl',
@@ -327,6 +362,8 @@ require(["vs/editor/editor.main"], function () {
   function twoDivResized() {
     canvas.width = twoDiv.offsetWidth
     canvas.height = twoDiv.offsetHeight - 100 // Keep in sync with 'logf' div height.
+    gpuCanvas.width = canvas.width
+    gpuCanvas.height = canvas.height
     gui.domElement.style.left = (twoDiv.offsetLeft + 11).toString() + 'px'
     gui.domElement.style.display = 'block'  // Why is GUI disappearing when typing in editor?!?
     editor.layout()
@@ -392,8 +429,259 @@ const hudCameraPerspective = new THREE.PerspectiveCamera(45, aspectRatio, 0.1, 1
 const hudCameraOrthographic = new THREE.OrthographicCamera(
   -hudFrustumSize, hudFrustumSize, hudFrustumSize, -hudFrustumSize, 0.1, 1000)
 
-let renderer = new THREE.WebGLRenderer({ canvas: canvas, context: gl })
+class WebGPURenderer {
+  constructor(canvas) {
+    this.canvas = canvas
+    this.device = null
+    this.context = canvas.getContext('webgpu')
+    this.pipeline = null
+    this.uniformBuffer = null
+    this.bindGroup = null
+    this.vertexBuffer = null
+    this.depthTexture = null
+    this.format = null
+    this.compilerSource = ''
+  }
+
+  async init() {
+    if (!navigator.gpu) {
+      throw new Error('WebGPU not supported')
+    }
+    const adapter = await navigator.gpu.requestAdapter()
+    if (!adapter) throw new Error('No appropriate GPUAdapter found.')
+    this.device = await adapter.requestDevice()
+    this.format = navigator.gpu.getPreferredCanvasFormat()
+    this.context.configure({
+      device: this.device,
+      format: this.format,
+      alphaMode: 'premultiplied',
+    })
+
+    // Create a quad (two triangles)
+    const vertices = new Float32Array([
+      -0.5, -0.5, 0,
+       0.5, -0.5, 0,
+      -0.5,  0.5, 0,
+      -0.5,  0.5, 0,
+       0.5, -0.5, 0,
+       0.5,  0.5, 0,
+    ])
+    this.vertexBuffer = this.device.createBuffer({
+      size: vertices.byteLength,
+      usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+    })
+    this.device.queue.writeBuffer(this.vertexBuffer, 0, vertices)
+
+    this.uniformBuffer = this.device.createBuffer({
+      size: 1024,
+      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+    })
+  }
+
+  async loadNewModel(source) {
+    this.compilerSource = source
+    const fullSource = `
+      struct Uniforms {
+        projectionMatrix: mat4x4<f32>,
+        modelViewMatrix: mat4x4<f32>,
+        modelMatrix: mat4x4<f32>,
+        ll: vec3<f32>,
+        resolution: f32,
+        ur: vec3<f32>,
+        numMaterials: f32,
+        minD: f32,
+        maxD: f32,
+        diagonal: f32,
+        _pad: f32,
+        colors: array<vec4<f32>, 16>,
+      };
+      @group(0) @binding(0) var<uniform> u: Uniforms;
+
+      struct VertexOutput {
+        @builtin(position) pos: vec4<f32>,
+        @location(0) v_xyz: vec4<f32>,
+        @location(1) u_d: f32,
+      };
+
+      @vertex
+      fn main_vs(@location(0) pos: vec3<f32>, @builtin(instance_index) instanceIdx: u32) -> VertexOutput {
+        var out: VertexOutput;
+        let d_step = u.diagonal / max(1.0, u.resolution - 1.0);
+        let d = u.minD + f32(instanceIdx) * d_step;
+        
+        var localPos = vec4<f32>(pos.x * u.diagonal, pos.y * u.diagonal, d, 1.0);
+        
+        out.pos = u.projectionMatrix * u.modelViewMatrix * localPos;
+        out.v_xyz = u.modelMatrix * localPos;
+        out.u_d = f32(instanceIdx) / max(1.0, u.resolution - 1.0);
+        return out;
+      }
+
+      ${source}
+    `
+    const shaderModule = this.device.createShaderModule({
+      code: fullSource
+    })
+
+    const compilationInfo = await shaderModule.getCompilationInfo()
+    if (compilationInfo.messages.length > 0) {
+      let hasError = false
+      let log = ''
+      for (const message of compilationInfo.messages) {
+        log += `${message.type}: ${message.message} at line ${message.lineNum}, col ${message.linePos}\n`
+        if (message.type === 'error') hasError = true
+      }
+      if (hasError) {
+        const logDiv = document.getElementById('logf')
+        logDiv.innerHTML = '<div>WGSL COMPILATION ERROR:</div><pre>' + log + '</pre>'
+        console.error('WGSL COMPILATION ERROR:', log)
+        return
+      }
+    }
+
+    this.pipeline = this.device.createRenderPipeline({
+      layout: 'auto',
+      vertex: {
+        module: shaderModule,
+        entryPoint: 'main_vs',
+        buffers: [{
+          arrayStride: 12,
+          attributes: [{ format: 'float32x3', offset: 0, shaderLocation: 0 }]
+        }]
+      },
+      fragment: {
+        module: shaderModule,
+        entryPoint: 'main',
+        targets: [{
+          format: this.format,
+          blend: {
+            color: { srcFactor: 'src-alpha', dstFactor: 'one-minus-src-alpha' },
+            alpha: { srcFactor: 'one', dstFactor: 'one' }
+          }
+        }],
+      },
+      primitive: { topology: 'triangle-list' },
+      depthStencil: {
+        depthWriteEnabled: false,
+        depthCompare: 'always',
+        format: 'depth24plus',
+      }
+    })
+
+    this.bindGroup = this.device.createBindGroup({
+      layout: this.pipeline.getBindGroupLayout(0),
+      entries: [{ binding: 0, resource: { buffer: this.uniformBuffer } }]
+    })
+  }
+
+  ensureDepthTexture() {
+    if (this.depthTexture && 
+        this.depthTexture.width === this.canvas.width && 
+        this.depthTexture.height === this.canvas.height) {
+      return
+    }
+
+    if (this.depthTexture) {
+      this.depthTexture.destroy()
+    }
+
+    this.depthTexture = this.device.createTexture({
+      size: [this.canvas.width || 1, this.canvas.height || 1],
+      format: 'depth24plus',
+      usage: GPUTextureUsage.RENDER_ATTACHMENT,
+    })
+  }
+
+  render(scene, camera) {
+    if (!this.pipeline) return
+
+    this.ensureDepthTexture()
+
+    // Ensure camera matrices are up to date
+    camera.updateMatrixWorld()
+    camera.matrixWorldInverse.getInverse(camera.matrixWorld)
+
+    // WebGPU Z-correction matrix (maps Z from [-1, 1] to [0, 1])
+    const correction = new THREE.Matrix4().set(
+      1, 0, 0, 0,
+      0, 1, 0, 0,
+      0, 0, 0.5, 0.5,
+      0, 0, 0, 1
+    )
+    const correctedProjection = new THREE.Matrix4().multiplyMatrices(correction, camera.projectionMatrix)
+
+    const lookAt = getLookAt()
+    const center = new THREE.Vector3(lookAt[0], lookAt[1], lookAt[2])
+    const ll = new THREE.Vector3(rangeValues.llx, rangeValues.lly, rangeValues.llz)
+    const ur = new THREE.Vector3(rangeValues.urx, rangeValues.ury, rangeValues.urz)
+    const minD = -(new THREE.Vector3().subVectors(center, ll)).length()
+    const maxD = (new THREE.Vector3().subVectors(ur, center)).length()
+    const diagonal = maxD - minD
+
+    let modelMatrix = new THREE.Matrix4().makeTranslation(lookAt[0], lookAt[1], lookAt[2])
+    if (modelCentroidNull) {
+      modelMatrix.copy(modelCentroidNull.matrixWorld)
+    }
+    const modelViewMatrix = new THREE.Matrix4().multiplyMatrices(camera.matrixWorldInverse, modelMatrix)
+    
+    const data = new Float32Array(16 + 16 + 16 + 4 + 4 + 4 + 16 * 4)
+    let offset = 0
+    data.set(correctedProjection.elements, offset); offset += 16
+    data.set(modelViewMatrix.elements, offset); offset += 16
+    data.set(modelMatrix.elements, offset); offset += 16
+    data.set([rangeValues.llx, rangeValues.lly, rangeValues.llz, uniforms.u_resolution.value], offset); offset += 4
+    data.set([rangeValues.urx, rangeValues.ury, rangeValues.urz, uniforms.u_numMaterials.value], offset); offset += 4
+    data.set([minD, maxD, diagonal, 0], offset); offset += 4
+    
+    for (let i = 1; i <= 16; i++) {
+      const c = uniforms['u_color' + i].value
+      data.set([c.x, c.y, c.z, c.w], offset); offset += 4
+    }
+
+    this.device.queue.writeBuffer(this.uniformBuffer, 0, data)
+
+    const commandEncoder = this.device.createCommandEncoder()
+    const textureView = this.context.getCurrentTexture().createView()
+
+    const renderPassDescriptor = {
+      colorAttachments: [{
+        view: textureView,
+        clearValue: { r: 0, g: 0, b: 0, a: 0 },
+        loadOp: 'clear',
+        storeOp: 'store',
+      }],
+      depthStencilAttachment: {
+        view: this.depthTexture.createView(),
+        depthClearValue: 1.0,
+        depthLoadOp: 'clear',
+        depthStoreOp: 'store',
+      },
+    }
+
+    const passEncoder = commandEncoder.beginRenderPass(renderPassDescriptor)
+    passEncoder.setPipeline(this.pipeline)
+    passEncoder.setBindGroup(0, this.bindGroup)
+    passEncoder.setVertexBuffer(0, this.vertexBuffer)
+    passEncoder.draw(6, Math.floor(uniforms.u_resolution.value))
+    passEncoder.end()
+
+    this.device.queue.submit([commandEncoder.finish()])
+  }
+
+  clear() {}
+  clearDepth() {}
+  setViewport(v) {}
+  getViewport(v) { v.set(0, 0, this.canvas.width, this.canvas.height) }
+  setSize(width, height) {
+    this.canvas.width = width
+    this.canvas.height = height
+  }
+}
+
+let renderer = new THREE.WebGLRenderer({ canvas: canvas, context: gl, alpha: true })
+let activeRenderer = renderer
 renderer.setSize(canvas.width, canvas.height)
+renderer.setClearColor(0x000000, 0)
 renderer.autoClear = false
 
 const uniforms = {
@@ -432,11 +720,45 @@ function copyUniforms() {
 
 let modelCentroidNull = null
 let compilerSource = ''
-function loadNewModel(source) {
-  console.log('Compiling new model.')
+let currentLanguage = 'glsl'
+let webgpuRenderer = null
+async function loadNewModel(source, language) {
+  console.log('Compiling new model. Language:', language)
   let firstRun = (compilerSource == '')
   compilerSource = source
+
+  if (language && language !== currentLanguage) {
+    console.log('Switching language from', currentLanguage, 'to', language)
+    currentLanguage = language
+    // Update Monaco language
+    monaco.editor.setModelLanguage(editor.getModel(), language)
+    
+    if (language === 'wgsl') {
+      if (!webgpuRenderer) {
+        webgpuRenderer = new WebGPURenderer(gpuCanvas)
+        try {
+          await webgpuRenderer.init()
+        } catch (e) {
+          console.error(e)
+          alert('Failed to initialize WebGPU: ' + e.message)
+          return
+        }
+      }
+      gpuCanvas.style.display = 'block'
+      activeRenderer = webgpuRenderer
+    } else {
+      gpuCanvas.style.display = 'none'
+      activeRenderer = renderer
+    }
+    // Controls always attached to the top WebGL canvas
+    controls.domElement = canvas
+  }
+
+  if (activeRenderer === webgpuRenderer) {
+    await webgpuRenderer.loadNewModel(source)
+  }
   uniformsChanged()
+
   let lookAt = getLookAt()
   controls.target0 = new THREE.Vector3(lookAt[0], lookAt[1], lookAt[2])
   if (firstRun) {
@@ -446,8 +768,8 @@ function loadNewModel(source) {
 }
 
 function getLookAt() {
-  const ll = new THREE.Vector3(rangeValues.minx, rangeValues.miny, rangeValues.minz)
-  const ur = new THREE.Vector3(rangeValues.maxx, rangeValues.maxy, rangeValues.maxz)
+  const ll = new THREE.Vector3(rangeValues.llx, rangeValues.lly, rangeValues.llz)
+  const ur = new THREE.Vector3(rangeValues.urx, rangeValues.ury, rangeValues.urz)
   const cx = 0.5 * (ll.x + ur.x)
   const cy = 0.5 * (ll.y + ur.y)
   const cz = 0.5 * (ll.z + ur.z)
@@ -497,16 +819,19 @@ function rangeValuesChanged() {
   // TODO: make this a GUI option?
   scene.add(new THREE.AxesHelper(diagonal))
 
-  const dStep = diagonal / (uniforms.u_resolution.value + 1.0)
-  for (let d = minD + dStep; d < maxD; d += dStep) {
-    let myUniforms = copyUniforms()
-    myUniforms.u_d.value = (d - minD) / (maxD - dStep - minD)
-    // console.log('d=' + d.toString() + ', u_d=' + myUniforms.u_d.value.toString());
-    let material = new THREE.ShaderMaterial({ uniforms: myUniforms, vertexShader: vs, fragmentShader: fsHeader + compilerSource, side: THREE.DoubleSide, transparent: true })
-    let plane = new THREE.PlaneBufferGeometry(diagonal, diagonal)  // Should this always fill the viewport?
-    let mesh = new THREE.Mesh(plane, material)
-    mesh.position.set(0, 0, d)
-    modelCentroidNull.add(mesh)
+  if (activeRenderer === renderer) {
+    const dStep = diagonal / Math.max(1.0, uniforms.u_resolution.value - 1.0)
+    for (let i = 0; i < uniforms.u_resolution.value; i++) {
+      let d = minD + i * dStep
+      let myUniforms = copyUniforms()
+      myUniforms.u_d.value = i / Math.max(1.0, uniforms.u_resolution.value - 1.0)
+      // console.log('d=' + d.toString() + ', u_d=' + myUniforms.u_d.value.toString());
+      let material = new THREE.ShaderMaterial({ uniforms: myUniforms, vertexShader: vs, fragmentShader: fsHeader + compilerSource, side: THREE.DoubleSide, transparent: true })
+      let plane = new THREE.PlaneBufferGeometry(diagonal, diagonal)  // Should this always fill the viewport?
+      let mesh = new THREE.Mesh(plane, material)
+      mesh.position.set(0, 0, d)
+      modelCentroidNull.add(mesh)
+    }
   }
 }
 
@@ -777,16 +1102,20 @@ let getIntersects = function (point, objects) {
   return raycaster.intersectObjects(objects)
 }
 function activateHudViewport() {
-  renderer.getViewport(fullViewport)
+  if (activeRenderer.getViewport) {
+    activeRenderer.getViewport(fullViewport)
+  }
   let width = hudSize
-  if (fullViewport.width < hudSize) {
-    width = fullViewport.width
+  const fvWidth = fullViewport.z || fullViewport.width
+  const fvHeight = fullViewport.w || fullViewport.height
+  if (fvWidth < hudSize) {
+    width = fvWidth
   }
   let height = hudSize
-  if (fullViewport.height < hudSize) {
-    height = fullViewport.height
+  if (fvHeight < hudSize) {
+    height = fvHeight
   }
-  hudViewport.set(fullViewport.width - width, fullViewport.height - height,
+  hudViewport.set(fvWidth - width, fvHeight - height,
     width, height)
   renderer.setViewport(hudViewport)
 }
@@ -837,8 +1166,10 @@ function onCanvasResize() {
   hudCameraPerspective.aspect = hudAspectRatio
   hudCameraPerspective.updateProjectionMatrix()
 
-  renderer.setSize(canvas.width, canvas.height)
-  renderer.getViewport(fullViewport)
+  activeRenderer.setSize(canvas.width, canvas.height)
+  if (activeRenderer.getViewport) {
+    activeRenderer.getViewport(fullViewport)
+  }
   controls.handleResize()
   render()
 }
@@ -871,18 +1202,29 @@ function checkCompilerErrors() {
         highlightShaderError(line, column)
         log = 'ERROR: ' + (parseInt(column, 10) + 1).toString() + ':' + line.toString() + ':' + log.substr(match[0].length)
       }
-      logfDiv.innerHTML = '<div>' + log + '</div>'
+      const logDiv = document.getElementById('logf')
+      logDiv.innerHTML = '<div>' + log + '</div>'
     }
   }
 }
 function render() {
-  renderer.clear()
-
   if (modelCentroidNull != null) {
-    modelCentroidNull.lookAt(activeCamera.position)  // comment out to debug.
+    modelCentroidNull.lookAt(activeCamera.position)
+    modelCentroidNull.updateMatrixWorld()
   }
-  renderer.render(scene, activeCamera)
-  checkCompilerErrors()
+
+  if (activeRenderer === webgpuRenderer) {
+    webgpuRenderer.render(scene, activeCamera)
+    renderer.setClearColor(0x000000, 0)
+    renderer.clear()
+    renderer.render(scene, activeCamera)
+    checkCompilerErrors()
+  } else {
+    renderer.setClearColor(0x000000, 1)
+    renderer.clear()
+    renderer.render(scene, activeCamera)
+    checkCompilerErrors()
+  }
 
   activateHudViewport()
   renderer.clearDepth()

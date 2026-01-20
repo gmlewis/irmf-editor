@@ -13,6 +13,7 @@
     <div class="split full-height" id="one" style="border:1px solid grey; overflow:hidden"></div>
     <div class="split full-height" id="two" style="border:1px solid grey; overflow:hidden">
       <canvas id="canvas" width="640" height="480"></canvas>
+      <canvas id="gpu-canvas" width="640" height="480" style="display:none"></canvas>
       <button id='slice-button' onclick="goSliceCallback()" style="display:none">Slice it!</button>
       <div id="logf" style="height:100px;color:white">
         <div>Output messages from the compiler will appear here.</div>
@@ -26,6 +27,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.7.6/dat.gui.min.js"></script>
   <script src="js/trackball-controls.js"></script>
   <script src="js/glsl-lang.js"></script>
+  <script src="js/wgsl-lang.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.20.0/min/vs/loader.js"></script>
   <script src="js/startup.js"></script>
   <script src="js/wasm_exec.js"></script>

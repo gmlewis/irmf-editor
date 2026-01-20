@@ -9,19 +9,21 @@ import (
 )
 
 type irmf struct {
-	Author    string        `json:"author"`
-	Copyright string        `json:"copyright"`
-	Date      string        `json:"date"`
-	Encoding  *string       `json:"encoding,omitempty"`
-	IRMF      string        `json:"irmf"`
-	Materials []string      `json:"materials"`
-	Max       []float64     `json:"max"`
-	Min       []float64     `json:"min"`
-	Notes     string        `json:"notes"`
-	Options   editorOptions `json:"options"`
-	Title     string        `json:"title"`
-	Units     string        `json:"units"`
-	Version   string        `json:"version"`
+	Author      string        `json:"author"`
+	License     string        `json:"license"`
+	Date        string        `json:"date"`
+	Encoding    *string       `json:"encoding,omitempty"`
+	IRMFVersion string        `json:"irmf"`
+	GLSLVersion string        `json:"glslVersion,omitempty"`
+	Language    string        `json:"language"`
+	Materials   []string      `json:"materials"`
+	Max         []float64     `json:"max"`
+	Min         []float64     `json:"min"`
+	Notes       string        `json:"notes"`
+	Options     editorOptions `json:"options"`
+	Title       string        `json:"title"`
+	Units       string        `json:"units"`
+	Version     string        `json:"version"`
 }
 
 type editorOptions struct {
@@ -49,9 +51,12 @@ type rgba [4]float64
 var (
 	jsonKeys = []string{
 		"author",
-		"copyright",
+		"license",
 		"date",
+		"encoding",
 		"irmf",
+		"glslVersion",
+		"language",
 		"materials",
 		"max",
 		"min",
@@ -80,12 +85,21 @@ func parseJSON(s string) (*irmf, error) {
 			return nil, err
 		}
 	}
+
+	// Fill in default values:
+	if result.Language == "" {
+		result.Language = "glsl"
+	}
+	if result.Units == "" {
+		result.Units = "mm"
+	}
+
 	return result, nil
 }
 
 func (i *irmf) validate(jsonBlobStr, shaderSrc string) (int, error) {
-	if i.IRMF != "1.0" {
-		return findKeyLine(jsonBlobStr, "irmf"), fmt.Errorf("unsupported IRMF version: %v", i.IRMF)
+	if i.IRMFVersion != "1.0" {
+		return findKeyLine(jsonBlobStr, "irmf"), fmt.Errorf("unsupported IRMF version: %v", i.IRMFVersion)
 	}
 	if len(i.Materials) < 1 {
 		return findKeyLine(jsonBlobStr, "materials"), errors.New("must list at least one material name")

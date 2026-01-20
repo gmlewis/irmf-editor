@@ -37,7 +37,23 @@ body {
   height: 100%;
 }
 
+#two {
+  position: relative;
+}
+
+#gpu-canvas {
+  z-index: 0;
+}
+
 #canvas {
+  z-index: 1;
+}
+
+#canvas,
+#gpu-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
   display: block;
 }
 
