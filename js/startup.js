@@ -41,6 +41,11 @@ let resolutionParameters = {
   res2048: false
 }
 
+let axesParameters = {
+  showAxes: true,
+  showThrough: true,
+}
+
 function setResolution(res) {
   setChecked('res' + res.toString())
   uniforms.u_resolution.value = res
@@ -54,6 +59,10 @@ resolutionFolder.add(resolutionParameters, 'res256').name('256').listen().onChan
 resolutionFolder.add(resolutionParameters, 'res512').name('512').listen().onChange(function () { setResolution(512); goJSONOptionsCallback(); uniformsChanged(); render() })
 resolutionFolder.add(resolutionParameters, 'res1024').name('1024').listen().onChange(function () { setResolution(1024); goJSONOptionsCallback(); uniformsChanged(); render() })
 resolutionFolder.add(resolutionParameters, 'res2048').name('2048').listen().onChange(function () { setResolution(2048); goJSONOptionsCallback(); uniformsChanged(); render() })
+
+let axesFolder = gui.addFolder("Axes")
+axesFolder.add(axesParameters, 'showAxes').name('Show Axes').onChange(render)
+axesFolder.add(axesParameters, 'showThrough').name('Show Through').onChange(render)
 function setChecked(prop) {
   for (let param in resolutionParameters) {
     resolutionParameters[param] = false
@@ -799,6 +808,7 @@ function uniformsChanged() {
   refreshRangeControllers()
   rangeValuesChanged()
 }
+let mainAxesHelper = null
 function rangeValuesChanged() {
   const llx = rangeValues.llx
   const lly = rangeValues.lly
@@ -837,7 +847,11 @@ function rangeValuesChanged() {
   scene.add(modelCentroidNull)
   // modelCentroidNull.add(new THREE.AxesHelper(diagonal));  // for debugging
   // TODO: make this a GUI option?
-  scene.add(new THREE.AxesHelper(diagonal))
+  mainAxesHelper = new THREE.AxesHelper(diagonal)
+  mainAxesHelper.visible = axesParameters.showAxes
+  mainAxesHelper.material.depthTest = !axesParameters.showThrough
+  mainAxesHelper.renderOrder = axesParameters.showThrough ? 1000 : 0
+  scene.add(mainAxesHelper)
 
   if (activeRenderer === renderer) {
     const dStep = diagonal / Math.max(1.0, uniforms.u_resolution.value - 1.0)
@@ -858,8 +872,8 @@ function rangeValuesChanged() {
 const hud = new THREE.Object3D()
 
 const axisLength = 1.0
-let axesHelper = new THREE.AxesHelper(axisLength)
-hud.add(axesHelper)
+let hudAxesHelper = new THREE.AxesHelper(axisLength)
+hud.add(hudAxesHelper)
 
 const viewPlane = new THREE.CircleBufferGeometry(0.4, 32)
 const viewCircle = new THREE.CircleBufferGeometry(0.1, 32)
@@ -1227,7 +1241,33 @@ function checkCompilerErrors() {
     }
   }
 }
+function updateAxes() {
+  if (mainAxesHelper) {
+    mainAxesHelper.visible = axesParameters.showAxes
+    mainAxesHelper.material.depthTest = !axesParameters.showThrough
+    mainAxesHelper.renderOrder = axesParameters.showThrough ? 1000 : 0
+  }
+  if (hudAxesHelper) {
+    hudAxesHelper.visible = axesParameters.showAxes
+  }
+
+  if (currentLanguage === 'wgsl') {
+    if (axesParameters.showThrough) {
+      canvas.style.zIndex = '1'
+      gpuCanvas.style.zIndex = '0'
+    } else {
+      canvas.style.zIndex = '0'
+      gpuCanvas.style.zIndex = '1'
+    }
+    gpuCanvas.style.pointerEvents = 'none'
+  } else {
+    canvas.style.zIndex = '1'
+    gpuCanvas.style.zIndex = '0'
+  }
+}
+
 function render() {
+  updateAxes()
   if (modelCentroidNull != null) {
     modelCentroidNull.lookAt(activeCamera.position)
     modelCentroidNull.updateMatrixWorld()
