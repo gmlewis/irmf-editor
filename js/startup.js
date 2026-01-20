@@ -31,6 +31,15 @@ const gui = new dat.GUI({ name: 'IRMF Editor', autoPlace: false })
 gui.domElement.id = 'gui'
 twoDiv.appendChild(gui.domElement)
 
+let viewParameters = {
+  resetView: function () {
+    if (typeof viewCallbacks !== 'undefined' && viewCallbacks[6]) {
+      viewCallbacks[6]()
+    }
+  }
+}
+gui.add(viewParameters, 'resetView').name('Reset View')
+
 let resolutionParameters = {
   res32: false,
   res64: false,
@@ -63,6 +72,7 @@ resolutionFolder.add(resolutionParameters, 'res2048').name('2048').listen().onCh
 let axesFolder = gui.addFolder("Axes")
 axesFolder.add(axesParameters, 'showAxes').name('Show Axes').onChange(function () { updateAxes(); render() })
 axesFolder.add(axesParameters, 'showThrough').name('Show Through').onChange(function () { updateAxes(); render() })
+
 function setChecked(prop) {
   for (let param in resolutionParameters) {
     resolutionParameters[param] = false
