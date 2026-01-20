@@ -726,6 +726,7 @@ function copyUniforms() {
 }
 
 let modelCentroidNull = null
+let oldBBox = { min: [0, 0, 0], max: [0, 0, 0] }
 let compilerSource = ''
 let currentLanguage = 'glsl'
 let webgpuRenderer = null
@@ -766,9 +767,21 @@ async function loadNewModel(source, language) {
   }
   uniformsChanged()
 
+  const newBBox = {
+    min: [rangeValues.minx, rangeValues.miny, rangeValues.minz],
+    max: [rangeValues.maxx, rangeValues.maxy, rangeValues.maxz]
+  }
+  const bboxChanged = firstRun ||
+    newBBox.min[0] !== oldBBox.min[0] || newBBox.min[1] !== oldBBox.min[1] || newBBox.min[2] !== oldBBox.min[2] ||
+    newBBox.max[0] !== oldBBox.max[0] || newBBox.max[1] !== oldBBox.max[1] || newBBox.max[2] !== oldBBox.max[2]
+
+  if (bboxChanged) {
+    oldBBox = newBBox
+  }
+
   let lookAt = getLookAt()
   controls.target0 = new THREE.Vector3(lookAt[0], lookAt[1], lookAt[2])
-  if (firstRun) {
+  if (bboxChanged) {
     viewCallbacks[6]()  // Reset to default view.
   }
   render()
