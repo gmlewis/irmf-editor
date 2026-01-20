@@ -1,3 +1,3 @@
 #!/bin/bash -ex
-# npm i -g go-wasm-cli
+# bun install -g go-wasm-cli
 go-wasm start

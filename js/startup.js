@@ -26,7 +26,7 @@ if (!gl) {
   console.log('Browser does not support WebGL2!')
 }
 
-const FRUSTUM_SIZE_FACTOR = 0.542 // Matches nicely with the orthographic view.
+const FRUSTUM_SIZE_FACTOR = 0.6194 // Matches nicely with the 75 degree FOV.
 
 // Set up GUI:
 const gui = new dat.GUI({ name: 'IRMF Editor', autoPlace: false })
@@ -1124,23 +1124,33 @@ function toOrtho(getViewport) {
   cameraOrthographic.bottom = viewport.bottom
   cameraOrthographic.zoom = 1.0
   cameraOrthographic.updateProjectionMatrix()
+  cameraPerspective.fov = fov
+  cameraPerspective.updateProjectionMatrix()
   activeCamera = cameraOrthographic
   controls.object = activeCamera
   hudActiveCamera = hudCameraOrthographic
   render()
 }
-function toPersp() {
-  const eye = new THREE.Vector3().subVectors(cameraOrthographic.position, controls.target)
-  const orthoHeight = (cameraOrthographic.top - cameraOrthographic.bottom) / cameraOrthographic.zoom
-  const fvRad = fov * Math.PI / 180
-  const requiredDistance = orthoHeight / (2 * Math.tan(fvRad / 2))
+function toPersp(matchOrtho) {
+  if (matchOrtho) {
+    const eye = new THREE.Vector3().subVectors(cameraOrthographic.position, controls.target)
+    const orthoHeight = (cameraOrthographic.top - cameraOrthographic.bottom) / cameraOrthographic.zoom
+    const currentDistance = eye.length()
 
-  if (eye.lengthSq() < 0.000001) {
-    // If we're somehow at the target, move to a default perspective offset.
-    cameraPerspective.position.set(requiredDistance, -requiredDistance, requiredDistance).add(controls.target)
+    if (currentDistance > 0.000001) {
+      // Match the FOV to the current ortho view at the current distance.
+      // This ensures the size matches perfectly without moving the camera,
+      // which prevents jumping inside the model.
+      const matchedFov = 2 * Math.atan(orthoHeight / (2 * currentDistance)) * 180 / Math.PI
+      cameraPerspective.fov = matchedFov
+      cameraPerspective.position.copy(cameraOrthographic.position)
+    } else {
+      cameraPerspective.fov = fov
+      cameraPerspective.position.set(resetCameraD, -resetCameraD, resetCameraD).add(controls.target)
+    }
   } else {
-    eye.setLength(requiredDistance)
-    cameraPerspective.position.copy(controls.target).add(eye)
+    cameraPerspective.fov = fov
+    cameraPerspective.position.copy(cameraOrthographic.position)
   }
 
   cameraPerspective.up.copy(cameraOrthographic.up)
@@ -1210,11 +1220,8 @@ function onCanvasClick(evt) {
   const isLeftClick = evt.button === 0
   const isTouch = evt.touches && evt.touches.length === 1
   if (activeCamera.isOrthographicCamera && (isLeftClick || isTouch)) {
-    const p = getLookAt()
-    controls.target.set(p[0], p[1], p[2])
-    toPersp()
-    // By calling update() after toPersp(), TrackballControls syncs its internal _eye
-    // with the newly positioned cameraPerspective.position.
+    // Switch to perspective mode and match the current ortho zoom/view exactly.
+    toPersp(true)
     controls.update()
   }
 
