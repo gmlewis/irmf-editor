@@ -7,5 +7,5 @@ git merge master
 source ./build.sh
 
 git commit -am 'Update wasm' || echo ''
-git push origin gh-pages
+git push origin gh-pages --force
 git checkout master
