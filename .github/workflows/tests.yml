@@ -1,0 +1,62 @@
+name: CI Tests
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6.0.2
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache: true
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: |
+          go mod download
+          cd tests/e2e && bun install
+
+      - name: Get Playwright version
+        id: playwright-version
+        run: echo "PLAYWRIGHT_VERSION=$(node -e "console.log(require('./tests/e2e/package.json').dependencies['@playwright/test'])")" >> $GITHUB_ENV
+
+      - name: Cache Playwright Browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ env.PLAYWRIGHT_VERSION }}
+
+      - name: Install Playwright Browsers & Deps
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: cd tests/e2e && npx playwright install chromium --with-deps
+
+      - name: Install Playwright Deps (on cache hit)
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: cd tests/e2e && npx playwright install-deps chromium
+
+      - name: Run all tests
+        run: chmod +x test-all.sh && ./test-all.sh
+        env:
+          LIBGL_ALWAYS_SOFTWARE: 1
+          GALLIUM_DRIVER: llvmpipe
+
+      - name: Upload Test Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: tests/e2e/test-results/
+          retention-days: 30

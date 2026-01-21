@@ -23,6 +23,10 @@ var (
 	setResolution js.Value
 )
 
+const (
+	githubRawPrefix = "https://raw.githubusercontent.com/"
+)
+
 func main() {
 	source := loadSource()
 
@@ -173,7 +177,7 @@ func initShader(src []byte) interface{} {
 	newShader = processIncludes(newShader)
 
 	// logf("Compiling new model shader:\n%v", newShader)
-	js.Global().Call("loadNewModel", newShader+fsFooter(jsonBlob.Materials))
+	js.Global().Call("loadNewModel", newShader+fsFooter(jsonBlob), jsonBlob.Language)
 
 	return nil
 }
@@ -493,7 +497,6 @@ func updateJSONOptions(jsonBlob *irmf) {
 
 func loadSource() []byte {
 	const oldPrefix = "/?s=github.com/"
-	const newPrefix = "https://raw.githubusercontent.com/"
 	url := js.Global().Get("document").Get("location").Get("href").String()
 	i := strings.Index(url, oldPrefix)
 	if i < 0 {
@@ -507,7 +510,7 @@ func loadSource() []byte {
 		return nil
 	}
 
-	location = newPrefix + strings.Replace(location, "/blob/", "/", 1)
+	location = githubRawPrefix + strings.Replace(location, "/blob/", "/", 1)
 	buf, _ := curl(location)
 	return buf
 }
@@ -569,6 +572,7 @@ const (
 	lygiaBaseURL = "https://lygia.xyz"
 	prefix1      = "lygia.xyz/"
 	prefix2      = "lygia/"
+	prefix3      = "github.com/"
 )
 
 func parseIncludeURL(trimmed string) string {
@@ -578,11 +582,19 @@ func parseIncludeURL(trimmed string) string {
 	}
 
 	inc := m[1]
+	if !strings.HasSuffix(inc, ".glsl") {
+		return ""
+	}
+
 	switch {
 	case strings.HasPrefix(inc, prefix1):
 		return fmt.Sprintf("%v/%v", lygiaBaseURL, inc[len(prefix1):])
 	case strings.HasPrefix(inc, prefix2):
 		return fmt.Sprintf("%v/%v", lygiaBaseURL, inc[len(prefix2):])
+	case strings.HasPrefix(inc, prefix3):
+		location := inc[len(prefix3):]
+		location = strings.Replace(location, "/blob/", "/", 1)
+		return githubRawPrefix + location
 	default:
 		return ""
 	}
@@ -629,6 +641,7 @@ func logf(fmtStr string, args ...interface{}) {
 
 const startupShader = `/*{
   irmf: "1.0",
+	language: "glsl",
   materials: ["PLA"],
   max: [10,10,10],
   min: [0,0,0],
@@ -646,9 +659,12 @@ void mainModel4(out vec4 materials, in vec3 xyz ) {
 }
 `
 
-func fsFooter(materialNames []string) string {
-	hsvs, hsls, rgbs := processMaterialNames(materialNames)
-	footer, colorNames := processColors(materialNames, hsvs, hsls, rgbs)
+func fsFooter(jsonBlob *irmf) string {
+	if jsonBlob.Language == "wgsl" {
+		return wgslFooter(jsonBlob)
+	}
+	hsvs, hsls, rgbs := processMaterialNames(jsonBlob.Materials)
+	footer, colorNames := processColors(jsonBlob.Materials, hsvs, hsls, rgbs)
 
 	colorFolder := js.Global().Call("getColorFolder")
 	if colorFolder.Type() != js.TypeNull && colorFolder.Type() != js.TypeUndefined {
@@ -700,7 +716,7 @@ func genColorMixer(materialNames []string, hsvs hsvMap, hsls hslMap, rgbs rgbMap
 	case 10, 11, 12, 13, 14, 15, 16:
 		footerFmt = fsFooterFmt16
 		colorToMaterial = func(colorNum int) string {
-			return []string{"m[0][0]", "m[0][1]", "m[0][2]", "m[0][3]", "m[1][0]", "m[1][1]", "m[1][2]", "m[1][3]", "m[2][0]", "m[2][1]", "m[2][2]", "m[2][3]", "m[2][0]", "m[2][1]", "m[2][2]", "m[2][3]"}[colorNum-1]
+			return []string{"m[0][0]", "m[0][1]", "m[0][2]", "m[0][3]", "m[1][0]", "m[1][1]", "m[1][2]", "m[1][3]", "m[2][0]", "m[2][1]", "m[2][2]", "m[2][3]", "m[3][0]", "m[3][1]", "m[3][2]", "m[3][3]"}[colorNum-1]
 		}
 	case 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32:
 		footerFmt = fsFooterFmt32
@@ -849,6 +865,70 @@ void main() {
   mainModel48(mA, mB, mC, v_xyz.xyz);
   out_FragColor = %v;
   // out_FragColor = v_xyz/5.0 + 0.5;  // DEBUG
+}
+`
+
+func wgslFooter(jsonBlob *irmf) string {
+	numMaterials := len(jsonBlob.Materials)
+	var footerFmt string
+	var colorToMaterial func(colorNum int) string
+	switch {
+	case numMaterials <= 4:
+		footerFmt = wgslFooterFmt4
+		colorToMaterial = func(colorNum int) string {
+			return []string{"m.x", "m.y", "m.z", "m.w"}[colorNum-1]
+		}
+	case numMaterials <= 9:
+		footerFmt = wgslFooterFmt9
+		colorToMaterial = func(colorNum int) string {
+			return []string{"m[0][0]", "m[0][1]", "m[0][2]", "m[1][0]", "m[1][1]", "m[1][2]", "m[2][0]", "m[2][1]", "m[2][2]"}[colorNum-1]
+		}
+	case numMaterials <= 16:
+		footerFmt = wgslFooterFmt16
+		colorToMaterial = func(colorNum int) string {
+			return []string{"m[0][0]", "m[0][1]", "m[0][2]", "m[0][3]", "m[1][0]", "m[1][1]", "m[1][2]", "m[1][3]", "m[2][0]", "m[2][1]", "m[2][2]", "m[2][3]", "m[3][0]", "m[3][1]", "m[3][2]", "m[3][3]"}[colorNum-1]
+		}
+	}
+
+	var colorMixers []string
+	for i := 1; i <= numMaterials; i++ {
+		colorMixers = append(colorMixers, fmt.Sprintf("u.colors[%v] * %v", i-1, colorToMaterial(i)))
+	}
+
+	colorMixer := fmt.Sprintf("u_d * (%v)", strings.Join(colorMixers, " + "))
+	return fmt.Sprintf(footerFmt, colorMixer)
+}
+
+const wgslFooterFmt4 = `
+@fragment
+fn main(@location(0) v_xyz: vec4<f32>, @location(1) u_d: f32) -> @location(0) vec4<f32> {
+  if (any(v_xyz.xyz < u.ll.xyz) || any(v_xyz.xyz > u.ur.xyz)) {
+    return vec4<f32>(0.0);
+  }
+  let m = mainModel4(v_xyz.xyz);
+  return %v;
+}
+`
+
+const wgslFooterFmt9 = `
+@fragment
+fn main(@location(0) v_xyz: vec4<f32>, @location(1) u_d: f32) -> @location(0) vec4<f32> {
+  if (any(v_xyz.xyz < u.ll.xyz) || any(v_xyz.xyz > u.ur.xyz)) {
+    return vec4<f32>(0.0);
+  }
+  let m = mainModel9(v_xyz.xyz);
+  return %v;
+}
+`
+
+const wgslFooterFmt16 = `
+@fragment
+fn main(@location(0) v_xyz: vec4<f32>, @location(1) u_d: f32) -> @location(0) vec4<f32> {
+  if (any(v_xyz.xyz < u.ll.xyz) || any(v_xyz.xyz > u.ur.xyz)) {
+    return vec4<f32>(0.0);
+  }
+  let m = mainModel16(v_xyz.xyz);
+  return %v;
 }
 `
 

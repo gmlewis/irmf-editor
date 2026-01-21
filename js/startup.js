@@ -5,17 +5,43 @@
 Split(['#one', '#two'])
 const twoDiv = document.getElementById('two')
 
-// Get A WebGL context
+const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0
+const recompileMessage = document.getElementById('recompile-message')
+if (recompileMessage) {
+  if (isMac) {
+    recompileMessage.innerText = 'Hit Cmd-Enter to recompile IRMF shader.'
+  } else {
+    recompileMessage.innerText = 'Hit Ctrl-Enter to recompile IRMF shader.'
+  }
+}
+
+// Get canvases
 /** @type {HTMLCanvasElement} */
 const canvas = document.getElementById('canvas')
+/** @type {HTMLCanvasElement} */
+const gpuCanvas = document.getElementById('gpu-canvas')
+
 const gl = canvas.getContext('webgl2')
 if (!gl) {
   console.log('Browser does not support WebGL2!')
 }
 
+const fov = 75.0
+const FRUSTUM_SIZE_FACTOR = 0.542 // Safe value that keeps camera outside model bounding sphere.
+
 // Set up GUI:
-const gui = new dat.GUI({ name: 'IRMF Editor', autoPlace: true })
+const gui = new dat.GUI({ name: 'IRMF Editor', autoPlace: false })
 gui.domElement.id = 'gui'
+twoDiv.appendChild(gui.domElement)
+
+let viewParameters = {
+  resetView: function () {
+    if (typeof viewCallbacks !== 'undefined' && viewCallbacks[6]) {
+      viewCallbacks[6]()
+    }
+  }
+}
+gui.add(viewParameters, 'resetView').name('Reset View')
 
 let resolutionParameters = {
   res32: false,
@@ -25,6 +51,11 @@ let resolutionParameters = {
   res512: true,
   res1024: false,
   res2048: false
+}
+
+let axesParameters = {
+  showAxes: true,
+  showThrough: true,
 }
 
 function setResolution(res) {
@@ -40,6 +71,11 @@ resolutionFolder.add(resolutionParameters, 'res256').name('256').listen().onChan
 resolutionFolder.add(resolutionParameters, 'res512').name('512').listen().onChange(function () { setResolution(512); goJSONOptionsCallback(); uniformsChanged(); render() })
 resolutionFolder.add(resolutionParameters, 'res1024').name('1024').listen().onChange(function () { setResolution(1024); goJSONOptionsCallback(); uniformsChanged(); render() })
 resolutionFolder.add(resolutionParameters, 'res2048').name('2048').listen().onChange(function () { setResolution(2048); goJSONOptionsCallback(); uniformsChanged(); render() })
+
+let axesFolder = gui.addFolder("Axes")
+axesFolder.add(axesParameters, 'showAxes').name('Show Axes').onChange(function () { updateAxes(); render() })
+axesFolder.add(axesParameters, 'showThrough').name('Show Through').onChange(function () { updateAxes(); render() })
+
 function setChecked(prop) {
   for (let param in resolutionParameters) {
     resolutionParameters[param] = false
@@ -192,7 +228,21 @@ const getFile = (url) => {
   return ""
 }
 
-const resolveLygia = (lines) => {
+const includeToUrl = (inc) => {
+  if (inc.startsWith('lygia/')) {
+    return `https://lygia.xyz/${inc.substring(6)}`
+  }
+  if (inc.startsWith('lygia.xyz/')) {
+    return `https://lygia.xyz/${inc.substring(10)}`
+  }
+  if (inc.startsWith('github.com/')) {
+    const noBlob = inc.substring(11).replace(/\/blob\//, '/')
+    return `https://raw.githubusercontent.com/${noBlob}`
+  }
+  return ''
+}
+
+const resolveIncludes = (lines) => {
   if (!Array.isArray(lines)) { lines = lines.split(/\r?\n/) }
 
   lines.forEach((line) => {
@@ -202,8 +252,8 @@ const resolveLygia = (lines) => {
     if (!m) { return }
     const inc = m[1].startsWith('lygia/') ? m[1].substring(6) :
       m[1].startsWith('lygia.xyz/') ? m[1].substring(10) : ''
-    if (!inc) { return }
-    const url = `https://lygia.xyz/${inc}`
+    const url = includeToUrl(m[1])
+    if (!url) { return }
     getFile(url)
   })
 }
@@ -220,7 +270,7 @@ const compileShader = () => {
   decorations = editor.deltaDecorations(decorations, [])
 
   const buf = editor.getValue()
-  resolveLygia(buf)
+  resolveIncludes(buf)
 
   goCompileCallback()
   // Restore cursor:
@@ -292,6 +342,38 @@ require(["vs/editor/editor.main"], function () {
       { open: '\'', close: '\'' },
     ]
   })
+
+  // Register WGSL
+  monaco.languages.register({ id: 'wgsl' })
+  monaco.languages.setMonarchTokensProvider('wgsl', wgsl)
+  monaco.languages.setLanguageConfiguration('wgsl', {
+    comments: {
+      lineComment: '//',
+      blockComment: ['/*', '*/'],
+    },
+    brackets: [
+      ['{', '}'],
+      ['[', ']'],
+      ['(', ')']
+    ],
+    autoClosingPairs: [
+      { open: '{', close: '}' },
+      { open: '[', close: ']' },
+      { open: '(', close: ')' },
+      { open: '`', close: '`', notIn: ['string'] },
+      { open: '"', close: '"', notIn: ['string'] },
+      { open: '\'', close: '\'', notIn: ['string', 'comment'] },
+    ],
+    surroundingPairs: [
+      { open: '{', close: '}' },
+      { open: '[', close: ']' },
+      { open: '(', close: ')' },
+      { open: '`', close: '`' },
+      { open: '"', close: '"' },
+      { open: '\'', close: '\'' },
+    ]
+  })
+
   editor = monaco.editor.create(document.getElementById('one'), {
     value: '',
     language: 'glsl',
@@ -313,8 +395,8 @@ require(["vs/editor/editor.main"], function () {
   function twoDivResized() {
     canvas.width = twoDiv.offsetWidth
     canvas.height = twoDiv.offsetHeight - 100 // Keep in sync with 'logf' div height.
-    gui.domElement.style.left = (twoDiv.offsetLeft + 11).toString() + 'px'
-    gui.domElement.style.display = 'block'  // Why is GUI disappearing when typing in editor?!?
+    gpuCanvas.width = canvas.width
+    gpuCanvas.height = canvas.height
     editor.layout()
     onCanvasResize()
   }
@@ -363,7 +445,6 @@ let fullViewport = new THREE.Vector4()
 let hudViewport = new THREE.Vector4()
 const hudSize = 256
 
-const fov = 75.0
 let aspectRatio = canvas.width / canvas.height
 console.log('canvas: (' + canvas.width.toString() + ',' + canvas.height.toString() + '), aspectRatio=' + aspectRatio.toString())
 let activeCamera = null
@@ -378,8 +459,257 @@ const hudCameraPerspective = new THREE.PerspectiveCamera(45, aspectRatio, 0.1, 1
 const hudCameraOrthographic = new THREE.OrthographicCamera(
   -hudFrustumSize, hudFrustumSize, hudFrustumSize, -hudFrustumSize, 0.1, 1000)
 
-let renderer = new THREE.WebGLRenderer({ canvas: canvas, context: gl })
+class WebGPURenderer {
+  constructor(canvas) {
+    this.canvas = canvas
+    this.device = null
+    this.context = canvas.getContext('webgpu')
+    this.pipeline = null
+    this.uniformBuffer = null
+    this.bindGroup = null
+    this.vertexBuffer = null
+    this.depthTexture = null
+    this.format = null
+    this.compilerSource = ''
+  }
+
+  async init() {
+    if (!navigator.gpu) {
+      throw new Error('WebGPU not supported')
+    }
+    const adapter = await navigator.gpu.requestAdapter()
+    if (!adapter) throw new Error('No appropriate GPUAdapter found.')
+    this.device = await adapter.requestDevice()
+    this.format = navigator.gpu.getPreferredCanvasFormat()
+    this.context.configure({
+      device: this.device,
+      format: this.format,
+      alphaMode: 'premultiplied',
+    })
+
+    // Create a quad (two triangles)
+    const vertices = new Float32Array([
+      -0.5, -0.5, 0,
+      0.5, -0.5, 0,
+      -0.5, 0.5, 0,
+      -0.5, 0.5, 0,
+      0.5, -0.5, 0,
+      0.5, 0.5, 0,
+    ])
+    this.vertexBuffer = this.device.createBuffer({
+      size: vertices.byteLength,
+      usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+    })
+    this.device.queue.writeBuffer(this.vertexBuffer, 0, vertices)
+
+    this.uniformBuffer = this.device.createBuffer({
+      size: 1024,
+      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+    })
+  }
+
+  async loadNewModel(source) {
+    this.compilerSource = source
+    const fullSource = `
+      struct Uniforms {
+        projectionMatrix: mat4x4<f32>,
+        modelViewMatrix: mat4x4<f32>,
+        modelMatrix: mat4x4<f32>,
+        ll: vec4<f32>,
+        ur: vec4<f32>,
+        minD: f32,
+        maxD: f32,
+        diagonal: f32,
+        _pad: f32,
+        colors: array<vec4<f32>, 16>,
+      };
+      @group(0) @binding(0) var<uniform> u: Uniforms;
+
+      struct VertexOutput {
+        @builtin(position) pos: vec4<f32>,
+        @location(0) v_xyz: vec4<f32>,
+        @location(1) u_d: f32,
+      };
+
+      @vertex
+      fn main_vs(@location(0) pos: vec3<f32>, @builtin(instance_index) instanceIdx: u32) -> VertexOutput {
+        var out: VertexOutput;
+        let d_step = u.diagonal / max(1.0, u.ll.w - 1.0);
+        let d = u.minD + f32(instanceIdx) * d_step;
+
+        var localPos = vec4<f32>(pos.x * u.diagonal, pos.y * u.diagonal, d, 1.0);
+
+        out.pos = u.projectionMatrix * u.modelViewMatrix * localPos;
+        out.v_xyz = u.modelMatrix * localPos;
+        out.u_d = f32(instanceIdx) / max(1.0, u.ll.w - 1.0);
+        return out;
+      }
+
+      ${source}
+    `
+    const shaderModule = this.device.createShaderModule({
+      code: fullSource
+    })
+
+    const compilationInfo = await shaderModule.getCompilationInfo()
+    if (compilationInfo.messages.length > 0) {
+      let hasError = false
+      let log = ''
+      for (const message of compilationInfo.messages) {
+        log += `${message.type}: ${message.message} at line ${message.lineNum}, col ${message.linePos}\n`
+        if (message.type === 'error') hasError = true
+      }
+      if (hasError) {
+        const logDiv = document.getElementById('logf')
+        logDiv.innerHTML = '<div>WGSL COMPILATION ERROR:</div><pre>' + log + '</pre>'
+        console.error('WGSL COMPILATION ERROR:', log)
+        return
+      }
+    }
+
+    this.pipeline = this.device.createRenderPipeline({
+      layout: 'auto',
+      vertex: {
+        module: shaderModule,
+        entryPoint: 'main_vs',
+        buffers: [{
+          arrayStride: 12,
+          attributes: [{ format: 'float32x3', offset: 0, shaderLocation: 0 }]
+        }]
+      },
+      fragment: {
+        module: shaderModule,
+        entryPoint: 'main',
+        targets: [{
+          format: this.format,
+          blend: {
+            color: { srcFactor: 'src-alpha', dstFactor: 'one-minus-src-alpha' },
+            alpha: { srcFactor: 'one', dstFactor: 'one' }
+          }
+        }],
+      },
+      primitive: { topology: 'triangle-list' },
+      depthStencil: {
+        depthWriteEnabled: false,
+        depthCompare: 'always',
+        format: 'depth24plus',
+      }
+    })
+
+    this.bindGroup = this.device.createBindGroup({
+      layout: this.pipeline.getBindGroupLayout(0),
+      entries: [{ binding: 0, resource: { buffer: this.uniformBuffer } }]
+    })
+  }
+
+  ensureDepthTexture() {
+    if (this.depthTexture &&
+      this.depthTexture.width === this.canvas.width &&
+      this.depthTexture.height === this.canvas.height) {
+      return
+    }
+
+    if (this.depthTexture) {
+      this.depthTexture.destroy()
+    }
+
+    this.depthTexture = this.device.createTexture({
+      size: [this.canvas.width || 1, this.canvas.height || 1],
+      format: 'depth24plus',
+      usage: GPUTextureUsage.RENDER_ATTACHMENT,
+    })
+  }
+
+  render(scene, camera) {
+    if (!this.pipeline) return
+
+    this.ensureDepthTexture()
+
+    // Ensure camera matrices are up to date
+    camera.updateMatrixWorld()
+    camera.matrixWorldInverse.getInverse(camera.matrixWorld)
+
+    // WebGPU Z-correction matrix (maps Z from [-1, 1] to [0, 1])
+    const correction = new THREE.Matrix4().set(
+      1, 0, 0, 0,
+      0, 1, 0, 0,
+      0, 0, 0.5, 0.5,
+      0, 0, 0, 1
+    )
+    const correctedProjection = new THREE.Matrix4().multiplyMatrices(correction, camera.projectionMatrix)
+
+    const lookAt = getLookAt()
+    const center = new THREE.Vector3(lookAt[0], lookAt[1], lookAt[2])
+    const ll = new THREE.Vector3(rangeValues.llx, rangeValues.lly, rangeValues.llz)
+    const ur = new THREE.Vector3(rangeValues.urx, rangeValues.ury, rangeValues.urz)
+    const minD = -(new THREE.Vector3().subVectors(center, ll)).length()
+    const maxD = (new THREE.Vector3().subVectors(ur, center)).length()
+    const diagonal = maxD - minD
+
+    let modelMatrix = new THREE.Matrix4().makeTranslation(lookAt[0], lookAt[1], lookAt[2])
+    if (modelCentroidNull) {
+      modelMatrix.copy(modelCentroidNull.matrixWorld)
+    }
+    const modelViewMatrix = new THREE.Matrix4().multiplyMatrices(camera.matrixWorldInverse, modelMatrix)
+
+    const data = new Float32Array(16 + 16 + 16 + 4 + 4 + 4 + 16 * 4)
+    let offset = 0
+    data.set(correctedProjection.elements, offset); offset += 16
+    data.set(modelViewMatrix.elements, offset); offset += 16
+    data.set(modelMatrix.elements, offset); offset += 16
+    data.set([rangeValues.llx, rangeValues.lly, rangeValues.llz, uniforms.u_resolution.value], offset); offset += 4
+    data.set([rangeValues.urx, rangeValues.ury, rangeValues.urz, uniforms.u_numMaterials.value], offset); offset += 4
+    data.set([minD, maxD, diagonal, 0], offset); offset += 4
+
+    for (let i = 1; i <= 16; i++) {
+      const c = uniforms['u_color' + i].value
+      data.set([c.x, c.y, c.z, c.w], offset); offset += 4
+    }
+
+    this.device.queue.writeBuffer(this.uniformBuffer, 0, data)
+
+    const commandEncoder = this.device.createCommandEncoder()
+    const textureView = this.context.getCurrentTexture().createView()
+
+    const renderPassDescriptor = {
+      colorAttachments: [{
+        view: textureView,
+        clearValue: { r: 0, g: 0, b: 0, a: 0 },
+        loadOp: 'clear',
+        storeOp: 'store',
+      }],
+      depthStencilAttachment: {
+        view: this.depthTexture.createView(),
+        depthClearValue: 1.0,
+        depthLoadOp: 'clear',
+        depthStoreOp: 'store',
+      },
+    }
+
+    const passEncoder = commandEncoder.beginRenderPass(renderPassDescriptor)
+    passEncoder.setPipeline(this.pipeline)
+    passEncoder.setBindGroup(0, this.bindGroup)
+    passEncoder.setVertexBuffer(0, this.vertexBuffer)
+    passEncoder.draw(6, Math.floor(uniforms.u_resolution.value))
+    passEncoder.end()
+
+    this.device.queue.submit([commandEncoder.finish()])
+  }
+
+  clear() { }
+  clearDepth() { }
+  setViewport(v) { }
+  getViewport(v) { v.set(0, 0, this.canvas.width, this.canvas.height) }
+  setSize(width, height) {
+    this.canvas.width = width
+    this.canvas.height = height
+  }
+}
+
+let renderer = new THREE.WebGLRenderer({ canvas: canvas, context: gl, alpha: true })
+let activeRenderer = renderer
 renderer.setSize(canvas.width, canvas.height)
+renderer.setClearColor(0x000000, 0)
 renderer.autoClear = false
 
 const uniforms = {
@@ -417,23 +747,71 @@ function copyUniforms() {
 }
 
 let modelCentroidNull = null
+let oldBBox = { min: [0, 0, 0], max: [0, 0, 0] }
 let compilerSource = ''
-function loadNewModel(source) {
-  console.log('Compiling new model.')
+let currentLanguage = 'glsl'
+let webgpuRenderer = null
+async function loadNewModel(source, language) {
+  console.log('Compiling new model. Language:', language)
   let firstRun = (compilerSource == '')
   compilerSource = source
+
+  if (language && language !== currentLanguage) {
+    console.log('Switching language from', currentLanguage, 'to', language)
+    currentLanguage = language
+    // Update Monaco language
+    monaco.editor.setModelLanguage(editor.getModel(), language)
+
+    if (language === 'wgsl') {
+      if (!webgpuRenderer) {
+        webgpuRenderer = new WebGPURenderer(gpuCanvas)
+        try {
+          await webgpuRenderer.init()
+        } catch (e) {
+          console.error(e)
+          alert('Failed to initialize WebGPU: ' + e.message)
+          return
+        }
+      }
+      gpuCanvas.style.display = 'block'
+      activeRenderer = webgpuRenderer
+    } else {
+      gpuCanvas.style.display = 'none'
+      activeRenderer = renderer
+    }
+    // Controls always attached to the top WebGL canvas
+    controls.domElement = canvas
+  }
+
+  if (activeRenderer === webgpuRenderer) {
+    await webgpuRenderer.loadNewModel(source)
+  }
   uniformsChanged()
+  updateAxes()
+
+  const newBBox = {
+    min: [rangeValues.minx, rangeValues.miny, rangeValues.minz],
+    max: [rangeValues.maxx, rangeValues.maxy, rangeValues.maxz]
+  }
+  const bboxChanged = firstRun ||
+    newBBox.min[0] !== oldBBox.min[0] || newBBox.min[1] !== oldBBox.min[1] || newBBox.min[2] !== oldBBox.min[2] ||
+    newBBox.max[0] !== oldBBox.max[0] || newBBox.max[1] !== oldBBox.max[1] || newBBox.max[2] !== oldBBox.max[2]
+
+  if (bboxChanged) {
+    oldBBox = newBBox
+  }
+
   let lookAt = getLookAt()
   controls.target0 = new THREE.Vector3(lookAt[0], lookAt[1], lookAt[2])
-  if (firstRun) {
+  if (bboxChanged) {
     viewCallbacks[6]()  // Reset to default view.
   }
   render()
 }
 
 function getLookAt() {
-  const ll = new THREE.Vector3(rangeValues.minx, rangeValues.miny, rangeValues.minz)
-  const ur = new THREE.Vector3(rangeValues.maxx, rangeValues.maxy, rangeValues.maxz)
+  const ll = new THREE.Vector3(rangeValues.llx, rangeValues.lly, rangeValues.llz)
+  const ur = new THREE.Vector3(rangeValues.urx, rangeValues.ury, rangeValues.urz)
   const cx = 0.5 * (ll.x + ur.x)
   const cy = 0.5 * (ll.y + ur.y)
   const cz = 0.5 * (ll.z + ur.z)
@@ -443,6 +821,9 @@ function uniformsChanged() {
   refreshRangeControllers()
   rangeValuesChanged()
 }
+let mainAxesHelper = null
+let modelRadius = 1.0
+
 function rangeValuesChanged() {
   const llx = rangeValues.llx
   const lly = rangeValues.lly
@@ -452,15 +833,20 @@ function rangeValuesChanged() {
   const urz = rangeValues.urz
   uniforms.u_ll.value.set(llx, lly, llz)
   uniforms.u_ur.value.set(urx, ury, urz)
-  let maxval = ((urx - llx) > (ury - lly)) ? (urx - llx) : (ury - lly)
-  maxval = (maxval > (urz - llz)) ? maxval : (urz - llz)
-  resetCameraD = maxval
-  // console.log('rangeValuesChanged: resetCameraD=' + resetCameraD.toString());
-
+  
   const ll = new THREE.Vector3(llx, lly, llz)
   const ur = new THREE.Vector3(urx, ury, urz)
   const lookAt = getLookAt()
   const center = new THREE.Vector3(lookAt[0], lookAt[1], lookAt[2])
+  
+  modelRadius = ll.distanceTo(ur) / 2.0
+  if (modelRadius <= 0) modelRadius = 1.0
+  
+  // Hero zoom: Distance where the bounding sphere perfectly fits the vertical FOV.
+  resetCameraD = modelRadius / Math.tan(fov * Math.PI / 360)
+  
+  controls.target.copy(center)
+  controls.target0.copy(center)
   const minD = -(new THREE.Vector3().subVectors(center, ll)).length()
   const maxD = (new THREE.Vector3().subVectors(ur, center)).length()
   let diagonal = maxD - minD
@@ -480,13 +866,20 @@ function rangeValuesChanged() {
 
   scene.add(modelCentroidNull)
   // modelCentroidNull.add(new THREE.AxesHelper(diagonal));  // for debugging
-  // TODO: make this a GUI option?
-  scene.add(new THREE.AxesHelper(diagonal))
+  mainAxesHelper = new THREE.AxesHelper(diagonal)
+  mainAxesHelper.visible = axesParameters.showAxes
+  mainAxesHelper.material.transparent = axesParameters.showThrough
+  mainAxesHelper.material.depthTest = !axesParameters.showThrough
+  mainAxesHelper.renderOrder = axesParameters.showThrough ? 1000 : 0
+  scene.add(mainAxesHelper)
 
-  const dStep = diagonal / (uniforms.u_resolution.value + 1.0)
-  for (let d = minD + dStep; d < maxD; d += dStep) {
+  if (activeRenderer !== renderer) { return }
+
+  const dStep = diagonal / Math.max(1.0, uniforms.u_resolution.value - 1.0)
+  for (let i = 0; i < uniforms.u_resolution.value; i++) {
+    let d = minD + i * dStep
     let myUniforms = copyUniforms()
-    myUniforms.u_d.value = (d - minD) / (maxD - dStep - minD)
+    myUniforms.u_d.value = i / Math.max(1.0, uniforms.u_resolution.value - 1.0)
     // console.log('d=' + d.toString() + ', u_d=' + myUniforms.u_d.value.toString());
     let material = new THREE.ShaderMaterial({ uniforms: myUniforms, vertexShader: vs, fragmentShader: fsHeader + compilerSource, side: THREE.DoubleSide, transparent: true })
     let plane = new THREE.PlaneBufferGeometry(diagonal, diagonal)  // Should this always fill the viewport?
@@ -499,8 +892,8 @@ function rangeValuesChanged() {
 const hud = new THREE.Object3D()
 
 const axisLength = 1.0
-let axesHelper = new THREE.AxesHelper(axisLength)
-hud.add(axesHelper)
+let hudAxesHelper = new THREE.AxesHelper(axisLength)
+hud.add(hudAxesHelper)
 
 const viewPlane = new THREE.CircleBufferGeometry(0.4, 32)
 const viewCircle = new THREE.CircleBufferGeometry(0.1, 32)
@@ -516,34 +909,30 @@ const viewRotations = [[0, halfPi, 0], [0, -halfPi, 0], [-halfPi, 0, 0], [halfPi
 [quarterPi, 0, quarterPi, 'ZYX'], [-quarterPi, 0, -quarterPi, 'ZYX'], [-quarterPi, 0, quarterPi, 'ZYX'], [quarterPi, 0, -quarterPi, 'ZYX'],
 [-quarterPi, 0, quarterPi, 'ZYX'], [quarterPi, 0, -quarterPi, 'ZYX'], [quarterPi, 0, quarterPi, 'ZYX'], [-quarterPi, 0, -quarterPi, 'ZYX']]
 const viewCallbacks = [
-  function () { toOrtho(rightView); let p = getLookAt(); controls.position0.set(p[0] + resetCameraD, p[1] + 0, p[2] + 0); controls.up0.set(0, 0, 1); controls.reset() },  // right
-  function () { toOrtho(leftView); let p = getLookAt(); controls.position0.set(p[0] + -resetCameraD, p[1] + 0, p[2] + 0); controls.up0.set(0, 0, 1); controls.reset() },  // left
-  function () { toOrtho(backView); let p = getLookAt(); controls.position0.set(p[0] + 0, p[1] + resetCameraD, p[2] + 0); controls.up0.set(0, 0, 1); controls.reset() },  // back
-  function () { toOrtho(frontView); let p = getLookAt(); controls.position0.set(p[0] + 0, p[1] + -resetCameraD, p[2] + 0); controls.up0.set(0, 0, 1); controls.reset() },  // front
-  function () { toOrtho(topView); let p = getLookAt(); controls.position0.set(p[0] + 0, p[1] + 0, p[2] + resetCameraD); controls.up0.set(0, 1, 0); controls.reset() },  // top
-  function () { toOrtho(bottomView); let p = getLookAt(); controls.position0.set(p[0] + 0, p[1] + 0, p[2] + -resetCameraD); controls.up0.set(0, -1, 0); controls.reset() }, // bottom
-  function () { toPersp(); let p = getLookAt(); controls.position0.set(p[0] + resetCameraD, p[1] + -resetCameraD, p[2] + resetCameraD); controls.up0.set(0, 0, 1); controls.reset() },
-  function () { toPersp(); let p = getLookAt(); controls.position0.set(p[0] + resetCameraD, p[1] + resetCameraD, p[2] + resetCameraD); controls.up0.set(0, 0, 1); controls.reset() },
-  function () { toPersp(); let p = getLookAt(); controls.position0.set(p[0] + -resetCameraD, p[1] + resetCameraD, p[2] + resetCameraD); controls.up0.set(0, 0, 1); controls.reset() },
-  function () { toPersp(); let p = getLookAt(); controls.position0.set(p[0] + -resetCameraD, p[1] + -resetCameraD, p[2] + resetCameraD); controls.up0.set(0, 0, 1); controls.reset() },
-  function () { toPersp(); let p = getLookAt(); controls.position0.set(p[0] + resetCameraD, p[1] + -resetCameraD, p[2] + -resetCameraD); controls.up0.set(0, 0, 1); controls.reset() },
-  function () { toPersp(); let p = getLookAt(); controls.position0.set(p[0] + resetCameraD, p[1] + resetCameraD, p[2] + -resetCameraD); controls.up0.set(0, 0, 1); controls.reset() },
-  function () { toPersp(); let p = getLookAt(); controls.position0.set(p[0] + -resetCameraD, p[1] + resetCameraD, p[2] + -resetCameraD); controls.up0.set(0, 0, 1); controls.reset() },
-  function () { toPersp(); let p = getLookAt(); controls.position0.set(p[0] + -resetCameraD, p[1] + -resetCameraD, p[2] + -resetCameraD); controls.up0.set(0, 0, 1); controls.reset() }
+  function () { toOrtho(rightView); let p = getLookAt(); controls.target0.set(p[0], p[1], p[2]); controls.position0.set(p[0] + resetCameraD, p[1] + 0, p[2] + 0); controls.up0.set(0, 0, 1); controls.reset() },  // right
+  function () { toOrtho(leftView); let p = getLookAt(); controls.target0.set(p[0], p[1], p[2]); controls.position0.set(p[0] + -resetCameraD, p[1] + 0, p[2] + 0); controls.up0.set(0, 0, 1); controls.reset() },  // left
+  function () { toOrtho(backView); let p = getLookAt(); controls.target0.set(p[0], p[1], p[2]); controls.position0.set(p[0] + 0, p[1] + resetCameraD, p[2] + 0); controls.up0.set(0, 0, 1); controls.reset() },  // back
+  function () { toOrtho(frontView); let p = getLookAt(); controls.target0.set(p[0], p[1], p[2]); controls.position0.set(p[0] + 0, p[1] + -resetCameraD, p[2] + 0); controls.up0.set(0, 0, 1); controls.reset() },  // front
+  function () { toOrtho(topView); let p = getLookAt(); controls.target0.set(p[0], p[1], p[2]); controls.position0.set(p[0] + 0, p[1] + 0, p[2] + resetCameraD); controls.up0.set(0, 1, 0); controls.reset() },  // top
+  function () { toOrtho(bottomView); let p = getLookAt(); controls.target0.set(p[0], p[1], p[2]); controls.position0.set(p[0] + 0, p[1] + 0, p[2] + -resetCameraD); controls.up0.set(0, -1, 0); controls.reset() }, // bottom
+  function () { toPersp(); let p = getLookAt(); controls.target0.set(p[0], p[1], p[2]); controls.position0.set(p[0] + resetCameraD, p[1] + -resetCameraD, p[2] + resetCameraD); controls.up0.set(0, 0, 1); controls.reset() },
+  function () { toPersp(); let p = getLookAt(); controls.target0.set(p[0], p[1], p[2]); controls.position0.set(p[0] + resetCameraD, p[1] + resetCameraD, p[2] + resetCameraD); controls.up0.set(0, 0, 1); controls.reset() },
+  function () { toPersp(); let p = getLookAt(); controls.target0.set(p[0], p[1], p[2]); controls.position0.set(p[0] + -resetCameraD, p[1] + resetCameraD, p[2] + resetCameraD); controls.up0.set(0, 0, 1); controls.reset() },
+  function () { toPersp(); let p = getLookAt(); controls.target0.set(p[0], p[1], p[2]); controls.position0.set(p[0] + -resetCameraD, p[1] + -resetCameraD, p[2] + resetCameraD); controls.up0.set(0, 0, 1); controls.reset() },
+  function () { toPersp(); let p = getLookAt(); controls.target0.set(p[0], p[1], p[2]); controls.position0.set(p[0] + resetCameraD, p[1] + -resetCameraD, p[2] + -resetCameraD); controls.up0.set(0, 0, 1); controls.reset() },
+  function () { toPersp(); let p = getLookAt(); controls.target0.set(p[0], p[1], p[2]); controls.position0.set(p[0] + resetCameraD, p[1] + resetCameraD, p[2] + -resetCameraD); controls.up0.set(0, 0, 1); controls.reset() },
+  function () { toPersp(); let p = getLookAt(); controls.target0.set(p[0], p[1], p[2]); controls.position0.set(p[0] + -resetCameraD, p[1] + resetCameraD, p[2] + -resetCameraD); controls.up0.set(0, 0, 1); controls.reset() },
+  function () { toPersp(); let p = getLookAt(); controls.target0.set(p[0], p[1], p[2]); controls.position0.set(p[0] + -resetCameraD, p[1] + -resetCameraD, p[2] + -resetCameraD); controls.up0.set(0, 0, 1); controls.reset() }
 ]
 
 function commonViewCalc(left, right, top, bottom) {
   aspectRatio = canvas.width / canvas.height
   let width = (right - left)
   let height = (top - bottom)
-  const fs = 0.542  // This value matches nicely with the orthographic view.
-  frustumSize = fs * height
-  resetCameraD = 0.5 * height
-  if (frustumSize * aspectRatio < fs * width) {
-    frustumSize = fs * width / aspectRatio
-    resetCameraD = 0.5 * width
+  frustumSize = FRUSTUM_SIZE_FACTOR * height
+  if (frustumSize * aspectRatio < FRUSTUM_SIZE_FACTOR * width) {
+    frustumSize = FRUSTUM_SIZE_FACTOR * width / aspectRatio
   }
-  console.log('commonViewCalc: aspectRatio=' + aspectRatio.toString() + ', width=' + width.toString() + ', height=' + height.toString() + ', frustumSize=' + frustumSize.toString() + ', resetCameraD=' + resetCameraD.toString())
   return {
     left: -aspectRatio * frustumSize,
     right: aspectRatio * frustumSize,
@@ -710,6 +1099,9 @@ hudCameraOrthographic.lookAt([0, 0, 0])
 // const cameraHelper = new THREE.CameraHelper(activeCamera);
 // scene.add(cameraHelper);
 
+canvas.addEventListener('mousedown', onCanvasClick, false)
+canvas.addEventListener('touchstart', onCanvasClick, false)
+
 let controls = new THREE.TrackballControls(activeCamera, canvas)
 
 controls.rotateSpeed = 2.0
@@ -726,27 +1118,57 @@ controls.keys = [65, 83, 68]
 
 controls.addEventListener('change', render)
 canvas.addEventListener('resize', onCanvasResize, false)
-canvas.addEventListener('mousedown', onCanvasClick, false)
-canvas.addEventListener('touchstart', onCanvasClick, false)
 onCanvasResize()
 animate()
 
 function toOrtho(getViewport) {
   const viewport = getViewport()
-  console.log(viewport)
+  cameraOrthographic.position.copy(cameraPerspective.position)
+  cameraOrthographic.up.copy(cameraPerspective.up)
   cameraOrthographic.left = viewport.left
   cameraOrthographic.right = viewport.right
   cameraOrthographic.top = viewport.top
   cameraOrthographic.bottom = viewport.bottom
+  cameraOrthographic.zoom = 1.0
   cameraOrthographic.updateProjectionMatrix()
+  cameraPerspective.fov = fov
+  cameraPerspective.updateProjectionMatrix()
   activeCamera = cameraOrthographic
   controls.object = activeCamera
   hudActiveCamera = hudCameraOrthographic
+  render()
 }
-function toPersp() {
+function toPersp(matchOrtho) {
+  cameraPerspective.fov = fov
+  if (matchOrtho) {
+    const eye = new THREE.Vector3().subVectors(cameraOrthographic.position, controls.target)
+    const orthoHeight = (cameraOrthographic.top - cameraOrthographic.bottom) / cameraOrthographic.zoom
+    
+    // Calculate the distance needed to match the ortho scale.
+    // We add an offset (half the model radius) to ensure we're looking at the face 
+    // from a safe distance, matching the scale at that forward plane.
+    const requiredDistance = (orthoHeight / (2 * Math.tan(cameraPerspective.fov * Math.PI / 360))) + (modelRadius * 0.5)
+
+    if (eye.lengthSq() < 0.000001) {
+      cameraPerspective.position.set(requiredDistance, -requiredDistance, requiredDistance).add(controls.target)
+    } else {
+      eye.setLength(requiredDistance)
+      cameraPerspective.position.copy(controls.target).add(eye)
+    }
+  } else {
+    const eye = new THREE.Vector3().subVectors(cameraOrthographic.position, controls.target)
+    if (eye.length() < resetCameraD) {
+      eye.setLength(resetCameraD)
+    }
+    cameraPerspective.position.copy(controls.target).add(eye)
+  }
+
+  cameraPerspective.up.copy(cameraOrthographic.up)
+  cameraPerspective.updateProjectionMatrix()
   activeCamera = cameraPerspective
   controls.object = activeCamera
   hudActiveCamera = hudCameraPerspective
+  render()
 }
 
 let raycaster = new THREE.Raycaster()
@@ -763,37 +1185,56 @@ let getIntersects = function (point, objects) {
   return raycaster.intersectObjects(objects)
 }
 function activateHudViewport() {
-  renderer.getViewport(fullViewport)
+  if (activeRenderer.getViewport) {
+    activeRenderer.getViewport(fullViewport)
+  }
   let width = hudSize
-  if (fullViewport.width < hudSize) {
-    width = fullViewport.width
+  const fvWidth = fullViewport.z || fullViewport.width
+  const fvHeight = fullViewport.w || fullViewport.height
+  if (fvWidth < hudSize) {
+    width = fvWidth
   }
   let height = hudSize
-  if (fullViewport.height < hudSize) {
-    height = fullViewport.height
+  if (fvHeight < hudSize) {
+    height = fvHeight
   }
-  hudViewport.set(fullViewport.width - width, fullViewport.height - height,
+  hudViewport.set(fvWidth - width, fvHeight - height,
     width, height)
   renderer.setViewport(hudViewport)
 }
 function onCanvasClick(evt) {
-  const x = evt.clientX
-  const y = evt.clientY
+  let x, y
+  if (evt.touches) {
+    x = evt.touches[0].clientX
+    y = evt.touches[0].clientY
+  } else {
+    x = evt.clientX
+    y = evt.clientY
+  }
   let array = getMousePosition(canvas, x, y)
-  if (array[0] < 0. || array[1] > 1.) { return }
-
-  evt.preventDefault()
-  onClickPosition.fromArray(array)
-  let intersects = getIntersects(onClickPosition, hud.children)
-  for (let i = 0; i < intersects.length; i++) {
-    const intersect = intersects[i]
-    if (!intersect.uv || intersect.object.type !== 'Mesh') { continue }
-    let clickCallback = clickCallbacksByUUID[intersect.object.uuid]
-    if (clickCallback) {
-      clickCallback()
-      return false
+  if (array[0] >= 0. && array[0] <= 1. && array[1] >= 0. && array[1] <= 1.) {
+    evt.preventDefault()
+    onClickPosition.fromArray(array)
+    let intersects = getIntersects(onClickPosition, hud.children)
+    for (let i = 0; i < intersects.length; i++) {
+      const intersect = intersects[i]
+      if (!intersect.uv || intersect.object.type !== 'Mesh') { continue }
+      let clickCallback = clickCallbacksByUUID[intersect.object.uuid]
+      if (clickCallback) {
+        clickCallback()
+        return false
+      }
     }
   }
+
+  const isLeftClick = evt.button === 0
+  const isTouch = evt.touches && evt.touches.length === 1
+  if (activeCamera.isOrthographicCamera && (isLeftClick || isTouch)) {
+    // Switch to perspective mode and match the current ortho zoom/view exactly.
+    toPersp(true)
+    controls.update()
+  }
+
   return true
 }
 function onCanvasResize() {
@@ -823,8 +1264,10 @@ function onCanvasResize() {
   hudCameraPerspective.aspect = hudAspectRatio
   hudCameraPerspective.updateProjectionMatrix()
 
-  renderer.setSize(canvas.width, canvas.height)
-  renderer.getViewport(fullViewport)
+  activeRenderer.setSize(canvas.width, canvas.height)
+  if (activeRenderer.getViewport) {
+    activeRenderer.getViewport(fullViewport)
+  }
   controls.handleResize()
   render()
 }
@@ -857,18 +1300,53 @@ function checkCompilerErrors() {
         highlightShaderError(line, column)
         log = 'ERROR: ' + (parseInt(column, 10) + 1).toString() + ':' + line.toString() + ':' + log.substr(match[0].length)
       }
-      logfDiv.innerHTML = '<div>' + log + '</div>'
+      const logDiv = document.getElementById('logf')
+      logDiv.innerHTML = '<div>' + log + '</div>'
     }
   }
 }
-function render() {
-  renderer.clear()
-
-  if (modelCentroidNull != null) {
-    modelCentroidNull.lookAt(activeCamera.position)  // comment out to debug.
+function updateAxes() {
+  if (mainAxesHelper) {
+    mainAxesHelper.visible = axesParameters.showAxes
+    // For GLSL mode, we use transparency and renderOrder to show through in a single pass
+    mainAxesHelper.material.transparent = axesParameters.showThrough
+    mainAxesHelper.material.depthTest = !axesParameters.showThrough
+    mainAxesHelper.renderOrder = axesParameters.showThrough ? 1000 : 0
   }
-  renderer.render(scene, activeCamera)
-  checkCompilerErrors()
+
+  if (currentLanguage === 'wgsl') {
+    if (axesParameters.showThrough) {
+      canvas.style.zIndex = '1'
+      gpuCanvas.style.zIndex = '0'
+    } else {
+      canvas.style.zIndex = '0'
+      gpuCanvas.style.zIndex = '1'
+    }
+    gpuCanvas.style.pointerEvents = 'none'
+  } else {
+    canvas.style.zIndex = '1'
+    gpuCanvas.style.zIndex = '0'
+  }
+}
+
+function render() {
+  if (modelCentroidNull != null) {
+    modelCentroidNull.lookAt(activeCamera.position)
+    modelCentroidNull.updateMatrixWorld()
+  }
+
+  if (activeRenderer === webgpuRenderer) {
+    webgpuRenderer.render(scene, activeCamera)
+    renderer.setClearColor(0x000000, 0)
+    renderer.clear()
+    renderer.render(scene, activeCamera)
+    checkCompilerErrors()
+  } else {
+    renderer.setClearColor(0x000000, 1)
+    renderer.clear()
+    renderer.render(scene, activeCamera)
+    checkCompilerErrors()
+  }
 
   activateHudViewport()
   renderer.clearDepth()
@@ -879,34 +1357,3 @@ function render() {
   // console.log('restoring viewport to full canvas:', fullViewport);
   renderer.setViewport(fullViewport)
 }
-
-// let sliceScene = null;
-// const rtWidth = 512;
-// const rtHeight = 512;
-// const sliceRenderTarget = new THREE.WebGLRenderTarget(rtWidth, rtHeight);
-// let pixelBuffer = null;
-// function getPixelBuffer() { return pixelBuffer; }
-// function renderSliceToTexture(z) {
-//   console.log("Rendering slice at z=", z);
-//   if (sliceScene != null) {
-//     sliceScene.dispose();
-//   }
-//   sliceScene = new THREE.Scene();
-//   const width = uniforms.u_ur.value.x - uniforms.u_ll.value.x;
-//   const height = uniforms.u_ur.value.y - uniforms.u_ll.value.y;
-//   let slicePlane = new THREE.PlaneBufferGeometry(width, height);
-//   let sliceMesh = new THREE.Mesh(slicePlane, material);
-//   sliceMesh.position.set(0, 0, z);
-//   sliceScene.add(sliceMesh);
-//   let sliceCamera = new THREE.OrthographicCamera(
-//     uniforms.u_ll.value.x, uniforms.u_ur.value.x,
-//     uniforms.u_ur.value.y, uniforms.u_ll.value.y, 0.1, 1000);
-
-//   renderer.setRenderTarget(sliceRenderTarget);
-//   renderer.render(sliceScene, sliceCamera);
-
-//   pixelBuffer = new Uint8Array(4 * rtWidth * rtHeight);
-//   renderer.readRenderTargetPixels(sliceRenderTarget, 0, 0, rtWidth, rtHeight, pixelBuffer);
-
-//   renderer.setRenderTarget(null);
-// }
