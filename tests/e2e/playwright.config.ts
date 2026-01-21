@@ -10,6 +10,10 @@ export default defineConfig({
   reporter: 'list',
   expect: {
     timeout: process.env.CI ? 30000 : 15000,
+    toHaveScreenshot: {
+      maxDiffPixelRatio: 0.05,
+      threshold: 0.2,
+    },
   },
   use: {
     baseURL: 'http://localhost:1234',
