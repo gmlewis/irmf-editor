@@ -19,7 +19,7 @@ export PATH="$NEW_PATH:/usr/bin:/bin"
 # Run Go WASM tests
 GOARCH=wasm GOOS=js go test
 
-# Run E2E Visual Regression tests
+# Run E2E Visual Regression tests - see tests/e2e/README.md
 cd tests/e2e
 if [ "$CI" = "true" ]; then
   # On CI, we might want to allow some pixel difference or handle missing snapshots
