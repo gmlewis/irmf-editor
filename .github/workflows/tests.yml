@@ -49,6 +49,9 @@ jobs:
 
       - name: Run all tests
         run: chmod +x test-all.sh && ./test-all.sh
+        env:
+          LIBGL_ALWAYS_SOFTWARE: 1
+          GALLIUM_DRIVER: llvmpipe
 
       - name: Upload Test Results
         if: always()

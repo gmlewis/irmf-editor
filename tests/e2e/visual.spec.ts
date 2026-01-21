@@ -41,7 +41,7 @@ test.describe('IRMF Editor Visual Regression', () => {
     // Let's drag at (900, 400).
     await page.mouse.move(900, 400)
     await page.mouse.down()
-    await page.mouse.move(800, 300, { steps: 10 })
+    await page.mouse.move(800, 300)
     await page.mouse.up()
     
     await page.waitForTimeout(2000)
