@@ -831,7 +831,6 @@ function rangeValuesChanged() {
   const urx = rangeValues.urx
   const ury = rangeValues.ury
   const urz = rangeValues.urz
-  console.log('rangeValuesChanged: ll=', llx, lly, llz, 'ur=', urx, ury, urz);
   uniforms.u_ll.value.set(llx, lly, llz)
   uniforms.u_ur.value.set(urx, ury, urz)
   
@@ -846,11 +845,8 @@ function rangeValuesChanged() {
   // Hero zoom: Distance where the bounding sphere perfectly fits the vertical FOV.
   resetCameraD = modelRadius / Math.tan(fov * Math.PI / 360)
   
-  console.log('rangeValuesChanged: modelRadius=', modelRadius, 'resetCameraD=', resetCameraD);
-
   controls.target.copy(center)
   controls.target0.copy(center)
-  console.log('rangeValuesChanged: controls.target=', controls.target);
   const minD = -(new THREE.Vector3().subVectors(center, ll)).length()
   const maxD = (new THREE.Vector3().subVectors(ur, center)).length()
   let diagonal = maxD - minD
@@ -931,21 +927,18 @@ const viewCallbacks = [
 
 function commonViewCalc(left, right, top, bottom) {
   aspectRatio = canvas.width / canvas.height
-  console.log('commonViewCalc: canvas=', canvas.width, canvas.height, 'aspectRatio=', aspectRatio);
   let width = (right - left)
   let height = (top - bottom)
   frustumSize = FRUSTUM_SIZE_FACTOR * height
   if (frustumSize * aspectRatio < FRUSTUM_SIZE_FACTOR * width) {
     frustumSize = FRUSTUM_SIZE_FACTOR * width / aspectRatio
   }
-  const res = {
+  return {
     left: -aspectRatio * frustumSize,
     right: aspectRatio * frustumSize,
     top: frustumSize,
     bottom: -frustumSize
   }
-  console.log('commonViewCalc: width=', width, 'height=', height, 'frustumSize=', frustumSize, 'res=', res);
-  return res
 }
 function rightView() {
   // console.log('rightView');
@@ -1129,7 +1122,6 @@ onCanvasResize()
 animate()
 
 function toOrtho(getViewport) {
-  console.log('--- toOrtho START ---');
   const viewport = getViewport()
   cameraOrthographic.position.copy(cameraPerspective.position)
   cameraOrthographic.up.copy(cameraPerspective.up)
@@ -1144,13 +1136,9 @@ function toOrtho(getViewport) {
   activeCamera = cameraOrthographic
   controls.object = activeCamera
   hudActiveCamera = hudCameraOrthographic
-  console.log('toOrtho: pos=', cameraOrthographic.position.x, cameraOrthographic.position.y, cameraOrthographic.position.z);
-  console.log('toOrtho: target=', controls.target.x, controls.target.y, controls.target.z);
-  console.log('toOrtho: frustum=', cameraOrthographic.left, cameraOrthographic.right, cameraOrthographic.top, cameraOrthographic.bottom);
   render()
 }
 function toPersp(matchOrtho) {
-  console.log('--- toPersp START (matchOrtho=' + matchOrtho + ') ---');
   cameraPerspective.fov = fov
   if (matchOrtho) {
     const eye = new THREE.Vector3().subVectors(cameraOrthographic.position, controls.target)
@@ -1160,8 +1148,6 @@ function toPersp(matchOrtho) {
     // We add an offset (half the model radius) to ensure we're looking at the face 
     // from a safe distance, matching the scale at that forward plane.
     const requiredDistance = (orthoHeight / (2 * Math.tan(cameraPerspective.fov * Math.PI / 360))) + (modelRadius * 0.5)
-
-    console.log('toPersp: currentDist=', eye.length(), 'orthoHeight=', orthoHeight, 'requiredDist=', requiredDistance);
 
     if (eye.lengthSq() < 0.000001) {
       cameraPerspective.position.set(requiredDistance, -requiredDistance, requiredDistance).add(controls.target)
@@ -1182,7 +1168,6 @@ function toPersp(matchOrtho) {
   activeCamera = cameraPerspective
   controls.object = activeCamera
   hudActiveCamera = hudCameraPerspective
-  console.log('toPersp: finalPos=', cameraPerspective.position.x, cameraPerspective.position.y, cameraPerspective.position.z);
   render()
 }
 
@@ -1245,7 +1230,6 @@ function onCanvasClick(evt) {
   const isLeftClick = evt.button === 0
   const isTouch = evt.touches && evt.touches.length === 1
   if (activeCamera.isOrthographicCamera && (isLeftClick || isTouch)) {
-    console.log('onCanvasClick: switching to perspective');
     // Switch to perspective mode and match the current ortho zoom/view exactly.
     toPersp(true)
     controls.update()
