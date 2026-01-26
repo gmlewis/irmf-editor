@@ -286,7 +286,7 @@ function highlightShaderError(line, column) {
   if (!column) {
     column = 1
   }
-  decorations = editor.deltaDecorations([], [
+  decorations = editor.deltaDecorations(decorations, [
     {
       range: new monaco.Range(line, column, line, column),
       options: {
@@ -509,8 +509,9 @@ class WebGPURenderer {
   }
 
   async loadNewModel(source) {
-    this.compilerSource = source
-    const fullSource = `
+    try {
+      this.compilerSource = source
+      const prefix = `
       struct Uniforms {
         projectionMatrix: mat4x4<f32>,
         modelViewMatrix: mat4x4<f32>,
@@ -544,62 +545,77 @@ class WebGPURenderer {
         out.u_d = f32(instanceIdx) / max(1.0, u.ll.w - 1.0);
         return out;
       }
+`
+      const fullSource = prefix + source
+      const prefixLines = prefix.split('\n').length
+      const shaderModule = this.device.createShaderModule({
+        code: fullSource
+      })
 
-      ${source}
-    `
-    const shaderModule = this.device.createShaderModule({
-      code: fullSource
-    })
-
-    const compilationInfo = await shaderModule.getCompilationInfo()
-    if (compilationInfo.messages.length > 0) {
-      let hasError = false
-      let log = ''
-      for (const message of compilationInfo.messages) {
-        log += `${message.type}: ${message.message} at line ${message.lineNum}, col ${message.linePos}\n`
-        if (message.type === 'error') hasError = true
-      }
-      if (hasError) {
-        const logDiv = document.getElementById('logf')
-        logDiv.innerHTML = '<div>WGSL COMPILATION ERROR:</div><pre>' + log + '</pre>'
-        console.error('WGSL COMPILATION ERROR:', log)
-        return
-      }
-    }
-
-    this.pipeline = this.device.createRenderPipeline({
-      layout: 'auto',
-      vertex: {
-        module: shaderModule,
-        entryPoint: 'main_vs',
-        buffers: [{
-          arrayStride: 12,
-          attributes: [{ format: 'float32x3', offset: 0, shaderLocation: 0 }]
-        }]
-      },
-      fragment: {
-        module: shaderModule,
-        entryPoint: 'main',
-        targets: [{
-          format: this.format,
-          blend: {
-            color: { srcFactor: 'src-alpha', dstFactor: 'one-minus-src-alpha' },
-            alpha: { srcFactor: 'one', dstFactor: 'one' }
+      const compilationInfo = await shaderModule.getCompilationInfo()
+      if (compilationInfo.messages.length > 0) {
+        let hasError = false
+        let log = ''
+        let firstErrorLine = 0
+        let firstErrorCol = 0
+        for (const message of compilationInfo.messages) {
+          let line = message.lineNum - prefixLines + 1
+          log += `${message.type}: ${message.message} at line ${line}, col ${message.linePos}\n`
+          if (message.type === 'error') {
+            hasError = true
+            if (firstErrorLine === 0) {
+              firstErrorLine = line
+              firstErrorCol = message.linePos
+            }
           }
-        }],
-      },
-      primitive: { topology: 'triangle-list' },
-      depthStencil: {
-        depthWriteEnabled: false,
-        depthCompare: 'always',
-        format: 'depth24plus',
+        }
+        if (hasError) {
+          const logDiv = document.getElementById('logf')
+          logDiv.innerHTML = '<div>WGSL COMPILATION ERROR:</div><pre>' + log + '</pre>'
+          console.error('WGSL COMPILATION ERROR:', log)
+          highlightShaderError(firstErrorLine, firstErrorCol)
+          return
+        }
       }
-    })
 
-    this.bindGroup = this.device.createBindGroup({
-      layout: this.pipeline.getBindGroupLayout(0),
-      entries: [{ binding: 0, resource: { buffer: this.uniformBuffer } }]
-    })
+      this.pipeline = this.device.createRenderPipeline({
+        layout: 'auto',
+        vertex: {
+          module: shaderModule,
+          entryPoint: 'main_vs',
+          buffers: [{
+            arrayStride: 12,
+            attributes: [{ format: 'float32x3', offset: 0, shaderLocation: 0 }]
+          }]
+        },
+        fragment: {
+          module: shaderModule,
+          entryPoint: 'main',
+          targets: [{
+            format: this.format,
+            blend: {
+              color: { srcFactor: 'src-alpha', dstFactor: 'one-minus-src-alpha' },
+              alpha: { srcFactor: 'one', dstFactor: 'one' }
+            }
+          }],
+        },
+        primitive: { topology: 'triangle-list' },
+        depthStencil: {
+          depthWriteEnabled: false,
+          depthCompare: 'always',
+          format: 'depth24plus',
+        }
+      })
+
+      this.bindGroup = this.device.createBindGroup({
+        layout: this.pipeline.getBindGroupLayout(0),
+        entries: [{ binding: 0, resource: { buffer: this.uniformBuffer } }]
+      })
+    } catch (e) {
+      const logDiv = document.getElementById('logf')
+      logDiv.innerHTML = '<div>WGSL COMPILATION EXCEPTION:</div><pre>' + e.message + '</pre>'
+      console.error('WGSL COMPILATION EXCEPTION:', e)
+    }
   }
 
   ensureDepthTexture() {
@@ -833,18 +849,18 @@ function rangeValuesChanged() {
   const urz = rangeValues.urz
   uniforms.u_ll.value.set(llx, lly, llz)
   uniforms.u_ur.value.set(urx, ury, urz)
-  
+
   const ll = new THREE.Vector3(llx, lly, llz)
   const ur = new THREE.Vector3(urx, ury, urz)
   const lookAt = getLookAt()
   const center = new THREE.Vector3(lookAt[0], lookAt[1], lookAt[2])
-  
+
   modelRadius = ll.distanceTo(ur) / 2.0
   if (modelRadius <= 0) modelRadius = 1.0
-  
+
   // Hero zoom: Distance where the bounding sphere perfectly fits the vertical FOV.
   resetCameraD = modelRadius / Math.tan(fov * Math.PI / 360)
-  
+
   controls.target.copy(center)
   controls.target0.copy(center)
   const minD = -(new THREE.Vector3().subVectors(center, ll)).length()
@@ -1143,9 +1159,9 @@ function toPersp(matchOrtho) {
   if (matchOrtho) {
     const eye = new THREE.Vector3().subVectors(cameraOrthographic.position, controls.target)
     const orthoHeight = (cameraOrthographic.top - cameraOrthographic.bottom) / cameraOrthographic.zoom
-    
+
     // Calculate the distance needed to match the ortho scale.
-    // We add an offset (half the model radius) to ensure we're looking at the face 
+    // We add an offset (half the model radius) to ensure we're looking at the face
     // from a safe distance, matching the scale at that forward plane.
     const requiredDistance = (orthoHeight / (2 * Math.tan(cameraPerspective.fov * Math.PI / 360))) + (modelRadius * 0.5)
 
@@ -1301,7 +1317,8 @@ function checkCompilerErrors() {
         log = 'ERROR: ' + (parseInt(column, 10) + 1).toString() + ':' + line.toString() + ':' + log.substr(match[0].length)
       }
       const logDiv = document.getElementById('logf')
-      logDiv.innerHTML = '<div>' + log + '</div>'
+      logDiv.innerHTML = '<div>GLSL COMPILATION EXCEPTION:</div><pre>' + log + '</pre>'
+      console.error('GLSL COMPILATION EXCEPTION:', log)
     }
   }
 }
