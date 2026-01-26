@@ -459,6 +459,14 @@ const hudCameraPerspective = new THREE.PerspectiveCamera(45, aspectRatio, 0.1, 1
 const hudCameraOrthographic = new THREE.OrthographicCamera(
   -hudFrustumSize, hudFrustumSize, hudFrustumSize, -hudFrustumSize, 0.1, 1000)
 
+function jsLogf(s) {
+  const logDiv = document.getElementById('logf')
+  if (logDiv) {
+    logDiv.innerHTML += s + '<br>'
+    logDiv.scrollTop = logDiv.scrollHeight
+  }
+}
+
 class WebGPURenderer {
   constructor(canvas) {
     this.canvas = canvas
@@ -471,15 +479,32 @@ class WebGPURenderer {
     this.depthTexture = null
     this.format = null
     this.compilerSource = ''
+    this.firstFrame = true
   }
 
   async init() {
     if (!navigator.gpu) {
+      jsLogf('WebGPU: navigator.gpu not found. WebGPU is not supported in this browser.')
       throw new Error('WebGPU not supported')
     }
+    jsLogf('WebGPU: Requesting adapter...')
     const adapter = await navigator.gpu.requestAdapter()
-    if (!adapter) throw new Error('No appropriate GPUAdapter found.')
+    if (!adapter) {
+      jsLogf('WebGPU: No appropriate GPUAdapter found.')
+      throw new Error('No appropriate GPUAdapter found.')
+    }
+    jsLogf('WebGPU: Requesting device...')
     this.device = await adapter.requestDevice()
+    this.device.lost.then((info) => {
+      console.error(`WebGPU device was lost: ${info.message}`);
+      jsLogf(`WebGPU device was lost: ${info.message}. Attempting to recover on next compilation.`);
+      if (info.reason !== 'destroyed') {
+        webgpuRenderer = null;
+        if (activeRenderer instanceof WebGPURenderer) {
+          activeRenderer = null;
+        }
+      }
+    });
     this.format = navigator.gpu.getPreferredCanvasFormat()
     this.context.configure({
       device: this.device,
@@ -510,6 +535,7 @@ class WebGPURenderer {
 
   async loadNewModel(source) {
     try {
+      jsLogf('WebGPU: Starting shader compilation...')
       this.compilerSource = source
       const prefix = `
       struct Uniforms {
@@ -551,8 +577,21 @@ class WebGPURenderer {
       const shaderModule = this.device.createShaderModule({
         code: fullSource
       })
+      this.shaderModule = shaderModule // Keep a reference to prevent GC
 
-      const compilationInfo = await shaderModule.getCompilationInfo()
+      let compilationInfo
+      try {
+        compilationInfo = await shaderModule.getCompilationInfo()
+      } catch (e) {
+        if (e.message.includes('dropped')) {
+          const logDiv = document.getElementById('logf')
+          logDiv.innerHTML = '<div>WGSL COMPILATION EXCEPTION:</div><pre>WebGPU device lost or shader too complex (Instance dropped). Try reducing complexity or resolution.</pre>'
+          console.error('WGSL COMPILATION EXCEPTION:', e)
+          return
+        }
+        throw e
+      }
+
       if (compilationInfo.messages.length > 0) {
         let hasError = false
         let log = ''
@@ -575,42 +614,66 @@ class WebGPURenderer {
           console.error('WGSL COMPILATION ERROR:', log)
           highlightShaderError(firstErrorLine, firstErrorCol)
           return
+        } else {
+          jsLogf('WGSL Compilation Warnings:\n' + log)
         }
       }
 
-      this.pipeline = this.device.createRenderPipeline({
-        layout: 'auto',
-        vertex: {
-          module: shaderModule,
-          entryPoint: 'main_vs',
-          buffers: [{
-            arrayStride: 12,
-            attributes: [{ format: 'float32x3', offset: 0, shaderLocation: 0 }]
-          }]
-        },
-        fragment: {
-          module: shaderModule,
-          entryPoint: 'main',
-          targets: [{
-            format: this.format,
-            blend: {
-              color: { srcFactor: 'src-alpha', dstFactor: 'one-minus-src-alpha' },
-              alpha: { srcFactor: 'one', dstFactor: 'one' }
-            }
-          }],
-        },
-        primitive: { topology: 'triangle-list' },
-        depthStencil: {
-          depthWriteEnabled: false,
-          depthCompare: 'always',
-          format: 'depth24plus',
+      jsLogf('WebGPU: Creating render pipeline...')
+      let pipeline
+      try {
+        pipeline = await this.device.createRenderPipelineAsync({
+          layout: 'auto',
+          vertex: {
+            module: shaderModule,
+            entryPoint: 'main_vs',
+            buffers: [{
+              arrayStride: 12,
+              attributes: [{ format: 'float32x3', offset: 0, shaderLocation: 0 }]
+            }]
+          },
+          fragment: {
+            module: shaderModule,
+            entryPoint: 'main',
+            targets: [{
+              format: this.format,
+              blend: {
+                color: { srcFactor: 'src-alpha', dstFactor: 'one-minus-src-alpha' },
+                alpha: { srcFactor: 'one', dstFactor: 'one' }
+              }
+            }],
+          },
+          primitive: { topology: 'triangle-list' },
+          depthStencil: {
+            depthWriteEnabled: false,
+            depthCompare: 'always',
+            format: 'depth24plus',
+          }
+        })
+      } catch (e) {
+        if (e.message.includes('Instance reference') || e.message.includes('dropped')) {
+          const logDiv = document.getElementById('logf')
+          logDiv.innerHTML = '<div>WGSL COMPILATION EXCEPTION:</div><pre>WebGPU device lost during pipeline creation. The shader may be too complex for your GPU. Try reducing resolution or complexity.</pre>'
+          console.error('WGSL COMPILATION EXCEPTION:', e)
+          // Force renderer recreation on next attempt
+          webgpuRenderer = null
+          if (activeRenderer instanceof WebGPURenderer) {
+            activeRenderer = null
+          }
+          return
         }
-      })
+        throw e
+      }
 
-      this.bindGroup = this.device.createBindGroup({
-        layout: this.pipeline.getBindGroupLayout(0),
+      const bindGroup = this.device.createBindGroup({
+        layout: pipeline.getBindGroupLayout(0),
         entries: [{ binding: 0, resource: { buffer: this.uniformBuffer } }]
       })
+
+      this.pipeline = pipeline
+      this.bindGroup = bindGroup
+      this.firstFrame = true
+      jsLogf('WebGPU: Shader compiled and pipeline created successfully.')
     } catch (e) {
       const logDiv = document.getElementById('logf')
       logDiv.innerHTML = '<div>WGSL COMPILATION EXCEPTION:</div><pre>' + e.message + '</pre>'
@@ -638,6 +701,11 @@ class WebGPURenderer {
 
   render(scene, camera) {
     if (!this.pipeline) return
+
+    if (this.firstFrame) {
+      jsLogf('WebGPU: First frame rendering...')
+      this.firstFrame = false
+    }
 
     this.ensureDepthTexture()
 
@@ -768,12 +836,14 @@ let compilerSource = ''
 let currentLanguage = 'glsl'
 let webgpuRenderer = null
 async function loadNewModel(source, language) {
-  console.log('Compiling new model. Language:', language)
+  const logDiv = document.getElementById('logf')
+  if (logDiv) logDiv.innerHTML = ''
+  jsLogf('Compiling new model. Language: ' + language)
   let firstRun = (compilerSource == '')
   compilerSource = source
 
   if (language && language !== currentLanguage) {
-    console.log('Switching language from', currentLanguage, 'to', language)
+    jsLogf('Switching language from ' + currentLanguage + ' to ' + language)
     currentLanguage = language
     // Update Monaco language
     monaco.editor.setModelLanguage(editor.getModel(), language)
@@ -785,6 +855,7 @@ async function loadNewModel(source, language) {
           await webgpuRenderer.init()
         } catch (e) {
           console.error(e)
+          webgpuRenderer = null
           alert('Failed to initialize WebGPU: ' + e.message)
           return
         }
@@ -801,6 +872,7 @@ async function loadNewModel(source, language) {
 
   if (activeRenderer === webgpuRenderer) {
     await webgpuRenderer.loadNewModel(source)
+    jsLogf('WebGPU: Model loaded and rendered.')
   }
   uniformsChanged()
   updateAxes()
@@ -1352,13 +1424,13 @@ function render() {
     modelCentroidNull.updateMatrixWorld()
   }
 
-  if (activeRenderer === webgpuRenderer) {
+  if (activeRenderer && activeRenderer === webgpuRenderer) {
     webgpuRenderer.render(scene, activeCamera)
     renderer.setClearColor(0x000000, 0)
     renderer.clear()
     renderer.render(scene, activeCamera)
     checkCompilerErrors()
-  } else {
+  } else if (activeRenderer) {
     renderer.setClearColor(0x000000, 1)
     renderer.clear()
     renderer.render(scene, activeCamera)
