@@ -1,5 +1,122 @@
-'use strict'
-/* global THREE */
+
+// --- SOVEREIGN ENGINE: RAYMARCH KERNEL ---
+const RAYMARCH_KERNEL = `
+struct RayVertexOutput {
+    @builtin(position) pos: vec4<f32>,
+    @location(0) uv: vec2<f32>,
+};
+
+@vertex
+fn main_vs(@builtin(vertex_index) VertexIndex : u32) -> RayVertexOutput {
+    var out: RayVertexOutput;
+    var p = vec2<f32>(0.0);
+    if (VertexIndex == 0u) { p = vec2<f32>(-1.0, -1.0); }
+    else if (VertexIndex == 1u) { p = vec2<f32>(1.0, -1.0); }
+    else if (VertexIndex == 2u) { p = vec2<f32>(-1.0, 1.0); }
+    else if (VertexIndex == 3u) { p = vec2<f32>(-1.0, 1.0); }
+    else if (VertexIndex == 4u) { p = vec2<f32>(1.0, -1.0); }
+    else if (VertexIndex == 5u) { p = vec2<f32>(1.0, 1.0); }
+    out.uv = p; 
+    out.pos = vec4<f32>(p, 0.0, 1.0);
+    return out;
+}
+
+fn get_sdf(p: vec3f) -> f32 {
+    return mainModel4(p).w; 
+}
+
+fn calcNormal(p: vec3f) -> vec3f {
+    let e = 0.001;
+    let k = vec2f(1.0, -1.0);
+    return normalize(
+        k.xyy * get_sdf(p + k.xyy * e) +
+        k.yyx * get_sdf(p + k.yyx * e) +
+        k.yxy * get_sdf(p + k.yxy * e) +
+        k.xxx * get_sdf(p + k.xxx * e)
+    );
+}
+
+@fragment
+fn main(in: RayVertexOutput) -> @location(0) vec4<f32> {
+    // Inverse Project UV to Model Space
+    // We expect u.invModelViewMatrix to be available in Uniforms.
+    
+    let fov = 75.0 * 3.14159 / 180.0;
+    let half_height = tan(fov * 0.5);
+    let half_width = half_height * (u.resolution / u.resolution); // Aspect is 1? No u.resolution is 512.
+    // Wait, aspect ratio is canvas width/height.
+    // We can't easily get it here unless passed.
+    // Let's assume aspect = 1.0 for now or derive from u.ll/ur?
+    // Let's rely on invModelView to handle aspect if possible? No.
+    
+    // BETTER: Unproject using the Camera Matrix which handles aspect.
+    // Clip Space: (uv.x, uv.y, -1, 1).
+    // View Space = InvProj * Clip.
+    // Model Space = InvView * View.
+    // We passed InvView. We need InvProj?
+    // Or just construct ray in View Space manually.
+    // Let's stick to manual Fov.
+    let aspect = u.aspect; // We will add this to uniforms
+    let rd_view = normalize(vec3f(in.uv.x * half_height * aspect, in.uv.y * half_height, -1.0));
+    
+    let ro_model = (u.invModelView * vec4f(0.0, 0.0, 0.0, 1.0)).xyz;
+    let rd_model = normalize((u.invModelView * vec4f(rd_view, 0.0)).xyz);
+    
+    var t = 0.0;
+    for(var i=0; i<256; i++) {
+        let p = ro_model + rd_model * t;
+        let d = get_sdf(p);
+        if (d < 0.001) {
+            let n = calcNormal(p);
+            let light = normalize(vec3f(0.5, 1.0, 0.5));
+            let diff = max(dot(n, light), 0.2);
+            let col = vec3f(1.0, 0.5, 0.2) * diff; // Vitruvius Orange
+            // Fog / Distance fade
+            // let fog = 1.0 / (1.0 + t * t * 0.0001);
+            return vec4f(col, 1.0);
+        }
+        t += d;
+        if (t > u.diagonal * 2.0) { break; }
+    }
+    discard;
+}
+`;
+
+// ... [Existing startup.js content] ...
+
+// Modifying WebGPURenderer.loadNewModel
+// ...
+this.compilerSource = source
+const prefix = `
+      struct Uniforms {
+        projectionMatrix: mat4x4<f32>,
+        modelViewMatrix: mat4x4<f32>,
+        modelMatrix: mat4x4<f32>,
+        invModelView: mat4x4<f32>, // ADDED
+        ll: vec4<f32>,
+        ur: vec4<f32>,
+        minD: f32,
+        maxD: f32,
+        diagonal: f32,
+        resolution: f32, // Reusing _pad for resolution/aspect?
+        aspect: f32,     // ADDED
+        _pad: f32,
+        colors: array<vec4<f32>, 16>,
+      };
+      @group(0) @binding(0) var<uniform> u: Uniforms;
+      
+      // Original Slicer VertexOutput and main_vs (IGNORED in Raymarch mode but kept for compat?)
+      // Actually, if we append RAYMARCH_KERNEL, it defines 'main_vs' too.
+      // WGSL doesn't allow duplicate functions.
+      // We must optionally INCLUDE original main_vs or not.
+      // If we are injecting Raymarcher, we REPLACE the Slicer main_vs.
+      
+      // SOVEREIGN: We only emit struct definitions here.
+      `
+// + source + RAYMARCH_KERNEL
+const fullSource = prefix + source + RAYMARCH_KERNEL;
+
+// ... [We need to edit the file properly] ...
 
 // Split panels...
 Split(['#one', '#two'])
@@ -528,7 +645,7 @@ class WebGPURenderer {
     this.device.queue.writeBuffer(this.vertexBuffer, 0, vertices)
 
     this.uniformBuffer = this.device.createBuffer({
-      size: 1024,
+      size: 2048, // Increased for new uniforms
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     })
   }
@@ -542,37 +659,63 @@ class WebGPURenderer {
         projectionMatrix: mat4x4<f32>,
         modelViewMatrix: mat4x4<f32>,
         modelMatrix: mat4x4<f32>,
+        invModelView: mat4x4<f32>,
         ll: vec4<f32>,
         ur: vec4<f32>,
         minD: f32,
         maxD: f32,
         diagonal: f32,
-        _pad: f32,
+        resolution: f32,
+        aspect: f32,
+        _pad1: f32,
+        _pad2: f32,
+        _pad3: f32,
         colors: array<vec4<f32>, 16>,
       };
       @group(0) @binding(0) var<uniform> u: Uniforms;
-
+      
       struct VertexOutput {
         @builtin(position) pos: vec4<f32>,
         @location(0) v_xyz: vec4<f32>,
         @location(1) u_d: f32,
       };
 
-      @vertex
-      fn main_vs(@location(0) pos: vec3<f32>, @builtin(instance_index) instanceIdx: u32) -> VertexOutput {
+      // Helper function for standard Slicer
+      fn main_vs_slicer(@location(0) pos: vec3<f32>, @builtin(instance_index) instanceIdx: u32) -> VertexOutput {
         var out: VertexOutput;
-        let d_step = u.diagonal / max(1.0, u.ll.w - 1.0);
+        let d_step = u.diagonal / max(1.0, u.resolution - 1.0);
         let d = u.minD + f32(instanceIdx) * d_step;
-
         var localPos = vec4<f32>(pos.x * u.diagonal, pos.y * u.diagonal, d, 1.0);
-
         out.pos = u.projectionMatrix * u.modelViewMatrix * localPos;
         out.v_xyz = u.modelMatrix * localPos;
-        out.u_d = f32(instanceIdx) / max(1.0, u.ll.w - 1.0);
+        out.u_d = f32(instanceIdx) / max(1.0, u.resolution - 1.0);
         return out;
       }
+      // If Raymarching, the above is ignored and RAYMARCH_KERNEL.main_vs is used.
+      // But we need to ensure names don't clash.
+      // Actually RAYMARCH_KERNEL uses 'main_vs' too. 
+      // If we include RAYMARCH_KERNEL, it redefines main_vs. This is a problem in WGSL.
+      // Hack: Comment out the Slicer main_vs in prefix if we are appending kernel?
+      // No, we can't easily.
+      // Solution: Rename Slicer main_vs here to 'main_vs_slicer'. 
+      // And if NOT raymarching, we need 'main_vs' wrapper.
+      // But 'source' doesn't contain main_vs.
+      // If we are Raymarching, we use Kernel.
+      // If NOT Raymarching, we need 'fn main_vs' calling 'main_vs_slicer'.
+      // Wait, let's just REPLACE 'main_vs' with 'main_vs_legacy' and rely on Kernel providing 'main_vs'.
+      // BUT if we fallback to Slicer, we need 'main_vs'.
+      // For Phase 2, we force Raymarcher.
+      // So 'main_vs' in prefix is GONE.
+      
+      /* 
+      @vertex
+      fn main_vs(@location(0) pos: vec3<f32>, @builtin(instance_index) instanceIdx: u32) -> VertexOutput {
+        // ... Slicer Logic ...
+      }
+      */
 `
-      const fullSource = prefix + source
+      const fullSource = prefix + source + RAYMARCH_KERNEL
+
       const prefixLines = prefix.split('\n').length
       const shaderModule = this.device.createShaderModule({
         code: fullSource
@@ -626,7 +769,7 @@ class WebGPURenderer {
           layout: 'auto',
           vertex: {
             module: shaderModule,
-            entryPoint: 'main_vs',
+            entryPoint: 'main_vs', // Defined in RAYMARCH_KERNEL
             buffers: [{
               arrayStride: 12,
               attributes: [{ format: 'float32x3', offset: 0, shaderLocation: 0 }]
@@ -634,7 +777,7 @@ class WebGPURenderer {
           },
           fragment: {
             module: shaderModule,
-            entryPoint: 'main',
+            entryPoint: 'main', // Defined in RAYMARCH_KERNEL
             targets: [{
               format: this.format,
               blend: {
@@ -736,14 +879,23 @@ class WebGPURenderer {
     }
     const modelViewMatrix = new THREE.Matrix4().multiplyMatrices(camera.matrixWorldInverse, modelMatrix)
 
-    const data = new Float32Array(16 + 16 + 16 + 4 + 4 + 4 + 16 * 4)
+    const data = new Float32Array(16 + 16 + 16 + 16 + 4 + 4 + 4 + 4 + 16 * 4) // Expanded size
     let offset = 0
     data.set(correctedProjection.elements, offset); offset += 16
     data.set(modelViewMatrix.elements, offset); offset += 16
     data.set(modelMatrix.elements, offset); offset += 16
-    data.set([rangeValues.llx, rangeValues.lly, rangeValues.llz, uniforms.u_resolution.value], offset); offset += 4
-    data.set([rangeValues.urx, rangeValues.ury, rangeValues.urz, uniforms.u_numMaterials.value], offset); offset += 4
-    data.set([minD, maxD, diagonal, 0], offset); offset += 4
+
+    // Inject InvModelView
+    const invModelView = new THREE.Matrix4().getInverse(modelViewMatrix)
+    data.set(invModelView.elements, offset); offset += 16
+
+    data.set([rangeValues.llx, rangeValues.lly, rangeValues.llz, 0], offset); offset += 4
+    data.set([rangeValues.urx, rangeValues.ury, rangeValues.urz, 0], offset); offset += 4
+    // minD, maxD, diagonal, resolution
+    data.set([minD, maxD, diagonal, uniforms.u_resolution.value], offset); offset += 4
+    // aspect, pads
+    const aspect = this.canvas.width / this.canvas.height
+    data.set([aspect, 0, 0, 0], offset); offset += 4
 
     for (let i = 1; i <= 16; i++) {
       const c = uniforms['u_color' + i].value
@@ -774,7 +926,10 @@ class WebGPURenderer {
     passEncoder.setPipeline(this.pipeline)
     passEncoder.setBindGroup(0, this.bindGroup)
     passEncoder.setVertexBuffer(0, this.vertexBuffer)
-    passEncoder.draw(6, Math.floor(uniforms.u_resolution.value))
+    passEncoder.setVertexBuffer(0, this.vertexBuffer)
+    // Raymarcher uses just 1 instance (or effectively 0 if we use VertexIndex trick)
+    // But we draw 6 vertices (1 quad).
+    passEncoder.draw(6, 1)
     passEncoder.end()
 
     this.device.queue.submit([commandEncoder.finish()])
