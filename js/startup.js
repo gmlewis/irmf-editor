@@ -82,41 +82,7 @@ fn main(in: RayVertexOutput) -> @location(0) vec4<f32> {
 }
 `;
 
-// ... [Existing startup.js content] ...
-
-// Modifying WebGPURenderer.loadNewModel
-// ...
-this.compilerSource = source
-const prefix = `
-      struct Uniforms {
-        projectionMatrix: mat4x4<f32>,
-        modelViewMatrix: mat4x4<f32>,
-        modelMatrix: mat4x4<f32>,
-        invModelView: mat4x4<f32>, // ADDED
-        ll: vec4<f32>,
-        ur: vec4<f32>,
-        minD: f32,
-        maxD: f32,
-        diagonal: f32,
-        resolution: f32, // Reusing _pad for resolution/aspect?
-        aspect: f32,     // ADDED
-        _pad: f32,
-        colors: array<vec4<f32>, 16>,
-      };
-      @group(0) @binding(0) var<uniform> u: Uniforms;
-      
-      // Original Slicer VertexOutput and main_vs (IGNORED in Raymarch mode but kept for compat?)
-      // Actually, if we append RAYMARCH_KERNEL, it defines 'main_vs' too.
-      // WGSL doesn't allow duplicate functions.
-      // We must optionally INCLUDE original main_vs or not.
-      // If we are injecting Raymarcher, we REPLACE the Slicer main_vs.
-      
-      // SOVEREIGN: We only emit struct definitions here.
-      `
-// + source + RAYMARCH_KERNEL
-const fullSource = prefix + source + RAYMARCH_KERNEL;
-
-// ... [We need to edit the file properly] ...
+// [Cleaned up injection artifact]
 
 // Split panels...
 Split(['#one', '#two'])
