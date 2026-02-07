@@ -1,0 +1,195 @@
+/*{
+  "author": "Sovereign AI (Vitruvius Remaster)",
+  "license": "Apache-2.0",
+  "date": "2026-02-06",
+  "irmf": "1.0",
+  "language": "wgsl",
+  "materials": ["Copper"],
+  "max": [170,150,50],
+  "min": [-150,-150,-50],
+  "title": "Fractal Rodin Coil (Sovereign SDF)",
+  "notes": "Remastered for Infinite Resolution using Signed Distance Fields. This shader uses a Precise Proxy to handle entry point deduction.",
+  "units": "mm",
+  "version": "1.0"
+}*/
+
+const M_PI = 3.1415926535897932384626433832795;
+
+fn rotAxis(axis: vec3f, a: f32) -> mat3x3f {
+  let s = sin(a);
+  let c = cos(a);
+  let oc = 1.0 - c;
+  const as_val = axis * s;
+  let p = mat3x3f(axis.x * axis, axis.y * axis, axis.z * axis);
+  let q = mat3x3f(c, as_val.z, -as_val.y, -as_val.z, c, as_val.x, as_val.y, -as_val.x, c);
+  return p * oc + q;
+}
+
+fn rotY(angle: f32) -> mat4x4f {
+  let c = cos(angle);
+  let s = sin(angle);
+  return mat4x4f(
+    vec4f(c, 0.0, -s, 0.0),
+    vec4f(0.0, 1.0, 0.0, 0.0),
+    vec4f(s, 0.0, c, 0.0),
+    vec4f(0.0, 0.0, 0.0, 1.0)
+  );
+}
+
+fn rotZ(angle: f32) -> mat4x4f {
+  let c = cos(angle);
+  let s = sin(angle);
+  return mat4x4f(
+    vec4f(c, s, 0.0, 0.0),
+    vec4f(-s, c, 0.0, 0.0),
+    vec4f(0.0, 0.0, 1.0, 0.0),
+    vec4f(0.0, 0.0, 0.0, 1.0)
+  );
+}
+
+fn sdCapsule(p: vec3f, a: vec3f, b: vec3f, r: f32) -> f32 {
+  let pa = p - a;
+  let ba = b - a;
+  let h = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0);
+  return length(pa - ba * h) - r;
+}
+
+// Global Lipschitz constant to prevent overshooting in Twisted Space
+const K_LIPSCHITZ = 0.15;
+
+fn sdRodinCoil(majorRadius: f32, minorRadius: f32, bundleRadius: f32, numBundles: f32, twistsPerRevolution: i32, xyz: vec3f) -> f32 {
+  var angle = atan2(xyz.y, xyz.x);
+  if (angle < 0.0) { angle += 2.0 * M_PI; }
+  let torusSliceXYZ = (rotZ(-angle) * vec4f(xyz, 1.0)).xyz - vec3f(majorRadius, 0.0, 0.0);
+  let twistedSliceXYZ = (rotY((f32(twistsPerRevolution) + (1.0/numBundles)) * angle) * vec4f(torusSliceXYZ, 1.0)).xyz;
+
+  var subAngle = atan2(twistedSliceXYZ.z, twistedSliceXYZ.x);
+  if (subAngle < 0.0) { subAngle += 2.0 * M_PI; }
+  let bundleNum = floor(subAngle * numBundles / (2.0 * M_PI) + 0.5 * numBundles / (2.0 * M_PI));
+  let bundleAngle = 2.0 * M_PI * bundleNum / numBundles;
+  let offsetRadius = minorRadius - bundleRadius;
+  let bundleCenter = vec3f(offsetRadius * cos(bundleAngle), 0.0, offsetRadius * sin(bundleAngle));
+  let subBundleXYZ = twistedSliceXYZ - bundleCenter;
+
+  let k_prime = f32(twistsPerRevolution) + 1.0/numBundles;
+  let r_eff = majorRadius + bundleCenter.x;
+  let v_cross = offsetRadius * k_prime;
+  let cos_alpha = r_eff / sqrt(r_eff * r_eff + v_cross * v_cross);
+
+  let unit_radial = vec2f(cos(bundleAngle), sin(bundleAngle));
+  let unit_tangent = vec2f(-sin(bundleAngle), cos(bundleAngle));
+
+  let d_radial = dot(subBundleXYZ.xz, unit_radial);
+  let d_tangent = dot(subBundleXYZ.xz, unit_tangent);
+
+  let p_local = vec2f(d_radial, d_tangent * cos_alpha);
+  
+  // 2nd-order Rodin Coil logic
+  let numBundles2 = numBundles;
+  let twistsPerRevolution2 = f32(10 * twistsPerRevolution);
+  let k2_prime = twistsPerRevolution2 + 1.0 / (numBundles * numBundles2);
+  let angle2 = k2_prime * angle;
+  let s2 = sin(angle2);
+  let c2 = cos(angle2);
+  let p_twisted = vec2f(p_local.x * c2 - p_local.y * s2, p_local.x * s2 + p_local.y * c2);
+
+  var subSubAngle = atan2(p_twisted.y, p_twisted.x);
+  if (subSubAngle < 0.0) { subSubAngle += 2.0 * M_PI; }
+  let subBundleNum = floor(subSubAngle * numBundles2 / (2.0 * M_PI) + 0.5 * numBundles2 / (2.0 * M_PI));
+  let subSubBundleAngle = 2.0 * M_PI * subBundleNum / numBundles2;
+
+  let subSubBundleRadius = 0.25 * bundleRadius;
+  let subOffsetRadius = bundleRadius - subSubBundleRadius;
+  let subBundleCenter = vec2f(subOffsetRadius * cos(subSubBundleAngle), subOffsetRadius * sin(subSubBundleAngle));
+  let p_relative = p_twisted - subBundleCenter;
+
+  let v1 = sqrt(r_eff * r_eff + v_cross * v_cross);
+  let v2_cross = subOffsetRadius * k2_prime;
+  let cos_alpha2 = v1 / sqrt(v1 * v1 + v2_cross * v2_cross);
+
+  let unit_radial2 = vec2f(cos(subSubBundleAngle), sin(subSubBundleAngle));
+  let unit_tangent2 = vec2f(-sin(subSubBundleAngle), cos(subSubBundleAngle));
+  let d_radial2 = dot(p_relative, unit_radial2);
+  let d_tangent2 = dot(p_relative, unit_tangent2);
+
+  let distSquared = d_radial2 * d_radial2 + (d_tangent2 * cos_alpha2) * (d_tangent2 * cos_alpha2);
+  let rawDist = sqrt(distSquared) - subSubBundleRadius;
+
+  return rawDist * K_LIPSCHITZ;
+}
+
+fn get_tiny_pos(a: f32, majorR: f32, offsetR: f32, subOffsetR: f32, k1: f32, k2: f32) -> vec3f {
+  let torus_slice_center = vec3f(majorR, 0.0, 0.0);
+  let p_cable_slice = vec3f(offsetR, 0.0, 0.0);
+  let p_tiny_twisted = vec3f(subOffsetR, 0.0, 0.0);
+  
+  let c2 = cos(-k2 * a);
+  let s2 = sin(-k2 * a);
+  let p_tiny_slice = vec3f(
+      p_tiny_twisted.x * c2 + p_tiny_twisted.z * s2,
+      p_tiny_twisted.y,
+      -p_tiny_twisted.x * s2 + p_tiny_twisted.z * c2
+  );
+
+  let combined = p_cable_slice + p_tiny_slice;
+  let c1 = cos(-k1 * a);
+  let s1 = sin(-k1 * a);
+  let p_full_slice = vec3f(
+      combined.x * c1 + combined.z * s1,
+      combined.y,
+      -combined.x * s1 + combined.z * c1
+  );
+
+  let final_base = torus_slice_center + p_full_slice;
+  let ca = cos(a);
+  let sa = sin(a);
+  return vec3f(
+      final_base.x * ca - final_base.y * sa,
+      final_base.x * sa + final_base.y * ca,
+      final_base.z
+  );
+}
+
+fn wiredRodinCoilSDF(majorRadius: f32, minorRadius: f32, bundleRadius: f32, numBundles: i32, twistsPerRevolution: i32, xyz: vec3f) -> f32 {
+  var d = sdRodinCoil(majorRadius, minorRadius, bundleRadius, f32(numBundles), twistsPerRevolution, xyz);
+
+  let numBundles2 = 9.0;
+  let twistsPerRevolution2 = 3.0;
+  let subSubBundleRadius = 0.25 * bundleRadius;
+  let subOffsetRadius = bundleRadius - subSubBundleRadius;
+  let k1_prime = f32(twistsPerRevolution) + 1.0/f32(numBundles);
+  let k2_prime = twistsPerRevolution2 + 1.0 / (f32(numBundles) * numBundles2);
+  let offsetRadius = minorRadius - bundleRadius;
+  let delta_angle = 0.08;
+
+  let p1 = get_tiny_pos(delta_angle, majorRadius, offsetRadius, subOffsetRadius, k1_prime, k2_prime);
+  let p2 = get_tiny_pos(-delta_angle, majorRadius, offsetRadius, subOffsetRadius, k1_prime, k2_prime);
+
+  let p1_cut = get_tiny_pos(0.9 * delta_angle, majorRadius, offsetRadius, subOffsetRadius, k1_prime, k2_prime);
+  let p2_cut = get_tiny_pos(-0.9 * delta_angle, majorRadius, offsetRadius, subOffsetRadius, k1_prime, k2_prime);
+  let cut_d = sdCapsule(xyz, p1_cut, p2_cut, 1.2 * subSubBundleRadius);
+  
+  d = max(d, -cut_d);
+
+  let term_len = 30.0;
+  let p1_end = p1 + vec3f(term_len, 0.0, 0.0);
+  let p2_end = p2 + vec3f(term_len, 0.0, 0.0);
+
+  d = min(d, sdCapsule(xyz, p1, p1_end, subSubBundleRadius));
+  d = min(d, sdCapsule(xyz, p2, p2_end, subSubBundleRadius));
+
+  return d;
+}
+
+fn mainModel4(xyz: vec3f) -> vec4f {
+  let d = wiredRodinCoilSDF(100.0, 50.0, 5.0, 9, 3, xyz);
+  
+  var materials = vec4f(0.0);
+  let is_solid = select(0.0, 1.0, d <= 0.0);
+  materials[0] = is_solid;
+  
+  // SOVEREIGN PROTOCOL: SDF Injection for Raymarcher
+  materials[3] = d; 
+  
+  return materials;
+}
