@@ -82,6 +82,13 @@ fn main(in: RayVertexOutput) -> @location(0) vec4<f32> {
 }
 `;
 
+const LEGACY_KERNEL = `
+@vertex
+fn main_vs(@location(0) pos: vec3<f32>, @builtin(instance_index) instanceIdx: u32) -> VertexOutput {
+    return main_vs_slicer(pos, instanceIdx);
+}
+`;
+
 // [Cleaned up injection artifact]
 
 // Split panels...
@@ -116,6 +123,14 @@ const FRUSTUM_SIZE_FACTOR = 0.542 // Safe value that keeps camera outside model 
 const gui = new dat.GUI({ name: 'IRMF Editor', autoPlace: false })
 gui.domElement.id = 'gui'
 twoDiv.appendChild(gui.domElement)
+
+// SOVEREIGN: Production Grade Renderer Toggle
+window.customParams = {
+  renderer: 'raymarch' // Default to Raymarch for Vitruvius Demo
+}
+gui.add(window.customParams, 'renderer', ['slicer', 'raymarch']).name('Engine').onChange(function () {
+  if (typeof compileShader === 'function') compileShader();
+})
 
 let viewParameters = {
   resetView: function () {
@@ -895,7 +910,14 @@ class WebGPURenderer {
     passEncoder.setVertexBuffer(0, this.vertexBuffer)
     // Raymarcher uses just 1 instance (or effectively 0 if we use VertexIndex trick)
     // But we draw 6 vertices (1 quad).
-    passEncoder.draw(6, 1)
+    // SOVEREIGN: Dynamic Draw Call
+    if (window.customParams && window.customParams.renderer === 'raymarch') {
+      passEncoder.draw(6, 1)
+    } else {
+      // Legacy Slicer: Draw instanced slices
+      const res = uniforms.u_resolution ? uniforms.u_resolution.value : 512;
+      passEncoder.draw(6, Math.floor(res));
+    }
     passEncoder.end()
 
     this.device.queue.submit([commandEncoder.finish()])
