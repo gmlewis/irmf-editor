@@ -131,3 +131,27 @@ func TestValidateTSL9and16(t *testing.T) {
 		}
 	}
 }
+
+func TestValidateTSLRejectsIncludes(t *testing.T) {
+	jsonBlob := `{"irmf":"1.0","language":"tsl","materials":["a"],"min":[0,0,0],"max":[1,1,1],"units":"mm"}`
+	blob, err := parseJSON(jsonBlob)
+	if err != nil {
+		t.Fatalf("parseJSON: %v", err)
+	}
+	src := "#include \"github.com/attacker/repo/blob/main/payload.glsl\"\nconst mainModel4 = (xyz) => [float(1)];\n"
+	if _, err := blob.validate(jsonBlob, src); err == nil || !strings.Contains(err.Error(), "#include") {
+		t.Fatalf("validate() err = %v, want an #include rejection", err)
+	}
+}
+
+func TestValidateRejectsHugeBounds(t *testing.T) {
+	jsonBlob := `{"irmf":"1.0","language":"glsl","materials":["a"],"min":[0,0,0],"max":[2000000,1,1],"units":"mm"}`
+	blob, err := parseJSON(jsonBlob)
+	if err != nil {
+		t.Fatalf("parseJSON: %v", err)
+	}
+	src := "void mainModel4(out vec4 materials, in vec3 xyz) { materials[0] = 1.0; }\n"
+	if _, err := blob.validate(jsonBlob, src); err == nil || !strings.Contains(err.Error(), "extent") {
+		t.Fatalf("validate() err = %v, want an extent error", err)
+	}
+}

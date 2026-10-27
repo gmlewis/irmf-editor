@@ -50,21 +50,19 @@ async function getTSLRuntime() {
   return tslRuntimePromise
 }
 
-// Confirm before running TSL downloaded from the internet (once per session).
+// Confirm before running TSL downloaded from the internet. Approval is
+// per source URL and per page load (never session-wide), so one "Continue"
+// cannot authorize a different model loaded later in the same tab.
+const approvedRemoteTSL = new Set()
 function confirmRemoteTSL(remoteSource) {
   if (!remoteSource) return true
-  let confirmed = false
-  try {
-    confirmed = sessionStorage.getItem('irmf-tsl-confirmed') === '1'
-  } catch (e) { /* storage may be unavailable */ }
-  if (confirmed) return true
+  const key = String(remoteSource)
+  if (approvedRemoteTSL.has(key)) return true
   const ok = window.confirm(
-    'This TSL model is executable JavaScript downloaded from the internet.\n\n' +
-    'Only run it if you trust its source. Continue?'
+    'This TSL model is executable JavaScript loaded from:\n\n' + key +
+    '\n\nOnly run it if you trust this exact source. Continue?'
   )
-  if (ok) {
-    try { sessionStorage.setItem('irmf-tsl-confirmed', '1') } catch (e) { /* ignore */ }
-  }
+  if (ok) approvedRemoteTSL.add(key)
   return ok
 }
 
@@ -163,13 +161,18 @@ function refreshMaterialColorControllers(names) {
     let name = names[i - 1]
     let colorName = 'color' + i.toString()
     let uniformName = 'u_color' + i.toString()
-    let ctrl = colorFolder.addColor(colorPalette, colorName).name(name).listen().onChange(function () {
+    // dat.GUI 0.7.x writes controller names with innerHTML. Material names
+    // come from the (untrusted) IRMF header, so never pass them to .name():
+    // set a safe placeholder and then use textContent for the label.
+    let ctrl = colorFolder.addColor(colorPalette, colorName).name('').listen().onChange(function () {
       let color = colorPalette[colorName]
       uniforms[uniformName].value.set(color[0] / 255.0, color[1] / 255.0, color[2] / 255.0, color[3])
       goJSONOptionsCallback()
       uniformsChanged()
       render()
     })
+    const label = ctrl.__li && ctrl.__li.querySelector('.property-name')
+    if (label) label.textContent = String(name)
     colorControllers.push(ctrl)
   }
 }
@@ -260,27 +263,25 @@ function installCompileShader(cb) { goCompileCallback = cb }
 let goJSONOptionsCallback = null
 function installUpdateJSONOptionsCallback(cb) { goJSONOptionsCallback = cb }
 
-const getFile = (url) => {
-  if (goAlreadyCached(url)) { return }
-  const httpRequest = new XMLHttpRequest()
-  httpRequest.open("GET", url, false)
-  httpRequest.send()
-  if (httpRequest.status === 200) {
-    const body = httpRequest.responseText
-    console.log(`got ${body.length} bytes from ${url}... saving to cache`)
-    goSaveToCache(url, body)
-    return body
-  }
-  console.log(`Unable to get code from ${url}`)
-  return ""
-}
-
 // Synchronous same-origin fetch used by Go's `?file=` loader.
 // Must be a function declaration so it exists as a property of globalThis and
 // can be reached with js.Global().Call("fetchTextSync", ...).
 function fetchTextSync(path) {
+  // Defense in depth: reject anything that resolves to another origin, even
+  // if the Go-side validation is bypassed or a browser normalizes the path.
+  let url
+  try {
+    url = new URL(path, document.baseURI)
+  } catch (e) {
+    console.log(`Unable to fetch ${path}: invalid URL`)
+    return ''
+  }
+  if (url.origin !== window.location.origin) {
+    console.log(`Refusing cross-origin model URL: ${url.href}`)
+    return ''
+  }
   const httpRequest = new XMLHttpRequest()
-  httpRequest.open('GET', path, false)
+  httpRequest.open('GET', url.pathname + url.search, false)
   try {
     httpRequest.send()
   } catch (e) {
@@ -292,50 +293,17 @@ function fetchTextSync(path) {
   return ''
 }
 
-const includeToUrl = (inc) => {
-  if (inc.startsWith('lygia/')) {
-    return `https://lygia.xyz/${inc.substring(6)}`
-  }
-  if (inc.startsWith('lygia.xyz/')) {
-    return `https://lygia.xyz/${inc.substring(10)}`
-  }
-  if (inc.startsWith('github.com/')) {
-    const noBlob = inc.substring(11).replace(/\/blob\//, '/')
-    return `https://raw.githubusercontent.com/${noBlob}`
-  }
-  return ''
-}
-
-const resolveIncludes = (lines) => {
-  if (!Array.isArray(lines)) { lines = lines.split(/\r?\n/) }
-
-  lines.forEach((line) => {
-    const trimmed = line.trim()
-    if (!trimmed.startsWith(`#include "`)) { return }
-    const m = trimmed.match(`#include "([^]*)"`)
-    if (!m) { return }
-    const inc = m[1].startsWith('lygia/') ? m[1].substring(6) :
-      m[1].startsWith('lygia.xyz/') ? m[1].substring(10) : ''
-    const url = includeToUrl(m[1])
-    if (!url) { return }
-    getFile(url)
-  })
-}
-
 let decorations = []
 let editor = null
 const compileShader = () => {
-  if (!goAlreadyCached) { console.log('alreadyCached missing'); return }
-  if (!goSaveToCache) { console.log('saveToCache missing'); return }
   if (!goCompileCallback) { console.log('compileCallback missing'); return }
 
   let currentSelection = editor.getSelection()
   // Clear decorations.
   decorations = editor.deltaDecorations(decorations, [])
 
-  const buf = editor.getValue()
-  resolveIncludes(buf)
-
+  // Remote includes are fetched by Go's processIncludes so that every fetch
+  // goes through the same consent, size, and count checks.
   goCompileCallback()
   // Restore cursor:
   editor.setSelection(currentSelection)
@@ -568,12 +536,63 @@ const hudCameraPerspective = new THREE.PerspectiveCamera(45, aspectRatio, 0.1, 1
 const hudCameraOrthographic = new THREE.OrthographicCamera(
   -hudFrustumSize, hudFrustumSize, hudFrustumSize, -hudFrustumSize, 0.1, 1000)
 
+// Log messages contain shader source, include URLs, and compiler diagnostics,
+// all of which are attacker-controlled. Always write them with textContent.
 function jsLogf(s) {
   const logDiv = document.getElementById('logf')
-  if (logDiv) {
-    logDiv.innerHTML += s + '<br>'
-    logDiv.scrollTop = logDiv.scrollHeight
+  if (!logDiv) return
+  const line = document.createElement('div')
+  line.style.whiteSpace = 'pre-wrap'
+  line.textContent = String(s)
+  logDiv.appendChild(line)
+  logDiv.scrollTop = logDiv.scrollHeight
+}
+
+function jsLogError(title, text) {
+  const logDiv = document.getElementById('logf')
+  if (!logDiv) return
+  if (title) {
+    const heading = document.createElement('div')
+    heading.textContent = String(title)
+    logDiv.appendChild(heading)
   }
+  if (text) {
+    const pre = document.createElement('pre')
+    pre.textContent = String(text)
+    logDiv.appendChild(pre)
+  }
+  logDiv.scrollTop = logDiv.scrollHeight
+}
+
+// Ask once per URL per page load before loading a model from elsewhere.
+// Kept in memory (not sessionStorage) so a new page load always asks again.
+const approvedRemoteModels = new Set()
+function confirmRemoteModel(url) {
+  url = String(url || '')
+  if (!url) return false
+  if (approvedRemoteModels.has(url)) return true
+  const ok = window.confirm(
+    'This link asks the editor to download a model from:\n\n' + url +
+    '\n\nIRMF models are executable code. Only continue if you trust this source.'
+  )
+  if (ok) approvedRemoteModels.add(url)
+  return ok
+}
+
+// Ask once per host per page load before downloading shader code. Kept in
+// memory (not sessionStorage) so a new page load always asks again.
+const approvedIncludeHosts = new Set()
+function confirmRemoteInclude(host) {
+  host = String(host || '')
+  if (!host) return false
+  if (approvedIncludeHosts.has(host)) return true
+  const ok = window.confirm(
+    'This model wants to download shader code from ' + host + '.\n\n' +
+    'Remote includes are executable code and are fetched every time the model ' +
+    'is loaded. Only allow this if you trust ' + host + '. Allow?'
+  )
+  if (ok) approvedIncludeHosts.add(host)
+  return ok
 }
 
 class WebGPURenderer {
@@ -693,8 +712,8 @@ class WebGPURenderer {
         compilationInfo = await shaderModule.getCompilationInfo()
       } catch (e) {
         if (e.message.includes('dropped')) {
-          const logDiv = document.getElementById('logf')
-          logDiv.innerHTML = '<div>WGSL COMPILATION EXCEPTION:</div><pre>WebGPU device lost or shader too complex (Instance dropped). Try reducing complexity or resolution.</pre>'
+          jsLogError('WGSL COMPILATION EXCEPTION:',
+            'WebGPU device lost or shader too complex (Instance dropped). Try reducing complexity or resolution.')
           console.error('WGSL COMPILATION EXCEPTION:', e)
           return
         }
@@ -718,8 +737,7 @@ class WebGPURenderer {
           }
         }
         if (hasError) {
-          const logDiv = document.getElementById('logf')
-          logDiv.innerHTML = '<div>WGSL COMPILATION ERROR:</div><pre>' + log + '</pre>'
+          jsLogError('WGSL COMPILATION ERROR:', log)
           console.error('WGSL COMPILATION ERROR:', log)
           highlightShaderError(firstErrorLine, firstErrorCol)
           return
@@ -761,8 +779,8 @@ class WebGPURenderer {
         })
       } catch (e) {
         if (e.message.includes('Instance reference') || e.message.includes('dropped')) {
-          const logDiv = document.getElementById('logf')
-          logDiv.innerHTML = '<div>WGSL COMPILATION EXCEPTION:</div><pre>WebGPU device lost during pipeline creation. The shader may be too complex for your GPU. Try reducing resolution or complexity.</pre>'
+          jsLogError('WGSL COMPILATION EXCEPTION:',
+            'WebGPU device lost during pipeline creation. The shader may be too complex for your GPU. Try reducing resolution or complexity.')
           console.error('WGSL COMPILATION EXCEPTION:', e)
           // Force renderer recreation on next attempt
           webgpuRenderer = null
@@ -784,8 +802,7 @@ class WebGPURenderer {
       this.firstFrame = true
       jsLogf('WebGPU: Shader compiled and pipeline created successfully.')
     } catch (e) {
-      const logDiv = document.getElementById('logf')
-      logDiv.innerHTML = '<div>WGSL COMPILATION EXCEPTION:</div><pre>' + e.message + '</pre>'
+      jsLogError('WGSL COMPILATION EXCEPTION:', e.message)
       console.error('WGSL COMPILATION EXCEPTION:', e)
     }
   }
@@ -946,12 +963,13 @@ let currentLanguage = 'glsl'
 let webgpuRenderer = null
 async function loadNewModel(source, language, colorModel) {
   const logDiv = document.getElementById('logf')
-  if (logDiv) logDiv.innerHTML = ''
+  if (logDiv) logDiv.textContent = ''
   jsLogf('Compiling new model. Language: ' + language)
   let firstRun = (compilerSource == '')
   compilerSource = source
-  // The remote-source flag describes the currently loaded document; consume it.
-  const remoteSource = !!window.__irmfRemoteSource
+  // The remote-source value is the URL of the currently loaded document
+  // (or false for same-origin/local content); consume it.
+  const remoteSource = window.__irmfRemoteSource || false
   window.__irmfRemoteSource = false
 
   if (language && language !== currentLanguage) {
@@ -1547,8 +1565,7 @@ function checkCompilerErrors() {
         highlightShaderError(line, column)
         log = 'ERROR: ' + (parseInt(column, 10) + 1).toString() + ':' + line.toString() + ':' + log.substr(match[0].length)
       }
-      const logDiv = document.getElementById('logf')
-      logDiv.innerHTML = '<div>GLSL COMPILATION EXCEPTION:</div><pre>' + log + '</pre>'
+      jsLogError('GLSL COMPILATION EXCEPTION:', log)
       console.error('GLSL COMPILATION EXCEPTION:', log)
     }
   }

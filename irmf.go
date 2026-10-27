@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"regexp"
 	"strings"
 )
@@ -111,6 +112,11 @@ func (i *irmf) validate(jsonBlobStr, shaderSrc string) (int, error) {
 	if i.Language == "tsl" && i.TSLVersion == "" {
 		logf("Warning: TSL model has no tslVersion; the editor pins three.js %s", tslThreeVersion)
 	}
+	if i.Language == "tsl" && hasIncludeDirective(shaderSrc) {
+		// A TSL body is JavaScript. Expanding #include would fetch remote text
+		// straight into executable code, so the format forbids it.
+		return findKeyLine(jsonBlobStr, "#include"), errors.New("TSL bodies must not contain #include; inline the included code")
+	}
 	if len(i.Materials) < 1 {
 		return findKeyLine(jsonBlobStr, "materials"), errors.New("must list at least one material name")
 	}
@@ -125,6 +131,16 @@ func (i *irmf) validate(jsonBlobStr, shaderSrc string) (int, error) {
 	}
 	if i.Units == "" {
 		return findKeyLine(jsonBlobStr, "units"), errors.New("units are required by IRMF 1.0 (even though the irmf-editor ignores the units)")
+	}
+	for axis := 0; axis < 3; axis++ {
+		if math.IsNaN(i.Min[axis]) || math.IsInf(i.Min[axis], 0) ||
+			math.IsNaN(i.Max[axis]) || math.IsInf(i.Max[axis], 0) {
+			return findKeyLine(jsonBlobStr, "min"), errors.New("model bounds must be finite")
+		}
+		if extent := i.Max[axis] - i.Min[axis]; extent > maxModelExtent {
+			return findKeyLine(jsonBlobStr, "max"), fmt.Errorf(
+				"model extent on axis %d is %v (limit is %v)", axis, extent, maxModelExtent)
+		}
 	}
 	if i.Min[0] >= i.Max[0] {
 		return findKeyLine(jsonBlobStr, "max"), fmt.Errorf("min.x (%v) must be strictly less than max.x (%v)", i.Min[0], i.Max[0])

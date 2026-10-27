@@ -25,14 +25,26 @@ const RESERVED = new Set([
 const ENTRY_NAMES = ['mainModel4', 'mainModel9', 'mainModel16', 'mainModel32', 'mainModel48'];
 
 // Names shadowed inside the evaluated body. This is a guardrail, not a
-// hardened sandbox: a determined body can still reach `globalThis`. The CLI
-// additionally runs the body in a permission-restricted child process.
-const SHADOWED = 'fetch, XMLHttpRequest, WebSocket, EventSource, importScripts, require, process';
+// hardened sandbox: a determined body can still escape via object prototypes
+// (for example `({}).constructor.constructor`). The CLI additionally runs the
+// body in a permission-restricted child process, and browser hosts must run it
+// in a sandboxed iframe or worker. Shadowing `globalThis` and the common host
+// handles stops accidental and copy-paste access and makes the intent clear.
+const SHADOWED_NAMES = [
+  'fetch', 'XMLHttpRequest', 'WebSocket', 'EventSource', 'importScripts',
+  'require', 'process', 'globalThis', 'global', 'self', 'window', 'top',
+  'parent', 'document', 'location', 'navigator', 'localStorage',
+  'sessionStorage', 'indexedDB', 'caches', 'Worker', 'SharedWorker', 'Function',
+  'crypto', 'performance', 'setTimeout', 'setInterval', 'queueMicrotask',
+  'Buffer', 'Deno', 'Bun', 'Date',
+];
+const SHADOWED_SET = new Set(SHADOWED_NAMES);
+const SHADOWED = SHADOWED_NAMES.join(', ');
 
 /** Build the fixed-line-count prelude that injects the TSL namespace. */
 export function buildPrelude(tslNamespace) {
   const names = Object.keys(tslNamespace || {})
-    .filter((n) => IDENT_RE.test(n) && !RESERVED.has(n))
+    .filter((n) => IDENT_RE.test(n) && !RESERVED.has(n) && !SHADOWED_SET.has(n))
     .sort();
   return (
     '"use strict";\n' +
@@ -112,6 +124,9 @@ function checkModuleSyntax(body) {
   }
   if (/\bimport\s*\(/.test(body)) {
     return 'TSL bodies must not use dynamic `import()`';
+  }
+  if (/(^|\n)[ \t]*#include\b/.test(body)) {
+    return 'TSL bodies must not contain `#include`; inline the included code';
   }
   return null;
 }
