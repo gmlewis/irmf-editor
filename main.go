@@ -529,7 +529,8 @@ func loadSource() []byte {
 		if j := strings.IndexAny(path, "&#"); j >= 0 {
 			path = path[:j]
 		}
-		if decoded, err := neturl.QueryUnescape(path); err == nil {
+		// PathUnescape (not QueryUnescape) so that '+' is preserved in file names.
+		if decoded, err := neturl.PathUnescape(path); err == nil {
 			path = decoded
 		}
 		if !strings.HasPrefix(path, "/") || strings.Contains(path, "..") ||
