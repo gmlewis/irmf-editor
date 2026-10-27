@@ -20,6 +20,53 @@ if (recompileMessage) {
 const canvas = document.getElementById('canvas')
 /** @type {HTMLCanvasElement} */
 const gpuCanvas = document.getElementById('gpu-canvas')
+/** @type {HTMLCanvasElement} */
+const tslCanvas = document.getElementById('tsl-canvas')
+
+// Lazily create the modern three.js TSL runtime the first time a TSL model is
+// loaded. It lives in a separate canvas because a canvas can only ever have one
+// context type, and the legacy WGSL renderer owns a `webgpu` context.
+let tslRuntime = null
+let tslRuntimePromise = null
+async function getTSLRuntime() {
+  if (tslRuntime) return tslRuntime
+  if (!tslRuntimePromise) {
+    tslRuntimePromise = (async () => {
+      const mod = await import('./tsl-runtime.js')
+      const rt = await mod.createRuntime({
+        canvas: tslCanvas,
+        log: jsLogf,
+        forceWebGL: !!window.__irmfTSLForceWebGL,
+        getUniforms: () => uniforms,
+        getRangeValues: () => rangeValues,
+        getResolution: () => uniforms.u_resolution.value,
+        getModelTransform: () => modelCentroidNull,
+      })
+      tslRuntime = rt
+      window.IRMFTSL = rt
+      return rt
+    })()
+  }
+  return tslRuntimePromise
+}
+
+// Confirm before running TSL downloaded from the internet (once per session).
+function confirmRemoteTSL(remoteSource) {
+  if (!remoteSource) return true
+  let confirmed = false
+  try {
+    confirmed = sessionStorage.getItem('irmf-tsl-confirmed') === '1'
+  } catch (e) { /* storage may be unavailable */ }
+  if (confirmed) return true
+  const ok = window.confirm(
+    'This TSL model is executable JavaScript downloaded from the internet.\n\n' +
+    'Only run it if you trust its source. Continue?'
+  )
+  if (ok) {
+    try { sessionStorage.setItem('irmf-tsl-confirmed', '1') } catch (e) { /* ignore */ }
+  }
+  return ok
+}
 
 const gl = canvas.getContext('webgl2')
 if (!gl) {
@@ -228,6 +275,23 @@ const getFile = (url) => {
   return ""
 }
 
+// Synchronous same-origin fetch used by Go's `?file=` loader.
+// Must be a function declaration so it exists as a property of globalThis and
+// can be reached with js.Global().Call("fetchTextSync", ...).
+function fetchTextSync(path) {
+  const httpRequest = new XMLHttpRequest()
+  httpRequest.open('GET', path, false)
+  try {
+    httpRequest.send()
+  } catch (e) {
+    console.log(`Unable to fetch ${path}: ${e.message}`)
+    return ''
+  }
+  if (httpRequest.status === 200) return httpRequest.responseText
+  console.log(`Unable to fetch ${path}: HTTP ${httpRequest.status}`)
+  return ''
+}
+
 const includeToUrl = (inc) => {
   if (inc.startsWith('lygia/')) {
     return `https://lygia.xyz/${inc.substring(6)}`
@@ -300,6 +364,17 @@ function highlightShaderError(line, column) {
 }
 
 function getEditor() { return editor }
+
+// Test/diagnostic hook: the legacy camera the TSL runtime must mirror.
+function getIRMFDebugState() {
+  if (!activeCamera) return null
+  return {
+    camera: {
+      position: activeCamera.position.toArray(),
+      quaternion: activeCamera.quaternion.toArray(),
+    },
+  }
+}
 
 require(["vs/editor/editor.main"], function () {
   monaco.editor.defineTheme('myCustomTheme', {
@@ -374,6 +449,37 @@ require(["vs/editor/editor.main"], function () {
     ]
   })
 
+  // Register TSL (JavaScript that builds a three.js node graph)
+  monaco.languages.register({ id: 'tsl' })
+  monaco.languages.setMonarchTokensProvider('tsl', tsl)
+  monaco.languages.setLanguageConfiguration('tsl', {
+    comments: {
+      lineComment: '//',
+      blockComment: ['/*', '*/'],
+    },
+    brackets: [
+      ['{', '}'],
+      ['[', ']'],
+      ['(', ')']
+    ],
+    autoClosingPairs: [
+      { open: '{', close: '}' },
+      { open: '[', close: ']' },
+      { open: '(', close: ')' },
+      { open: '`', close: '`', notIn: ['string'] },
+      { open: '"', close: '"', notIn: ['string'] },
+      { open: '\'', close: '\'', notIn: ['string', 'comment'] },
+    ],
+    surroundingPairs: [
+      { open: '{', close: '}' },
+      { open: '[', close: ']' },
+      { open: '(', close: ')' },
+      { open: '`', close: '`' },
+      { open: '"', close: '"' },
+      { open: '\'', close: '\'' },
+    ]
+  })
+
   editor = monaco.editor.create(document.getElementById('one'), {
     value: '',
     language: 'glsl',
@@ -397,6 +503,9 @@ require(["vs/editor/editor.main"], function () {
     canvas.height = twoDiv.offsetHeight - 100 // Keep in sync with 'logf' div height.
     gpuCanvas.width = canvas.width
     gpuCanvas.height = canvas.height
+    tslCanvas.width = canvas.width
+    tslCanvas.height = canvas.height
+    if (tslRuntime) tslRuntime.resize()
     editor.layout()
     onCanvasResize()
   }
@@ -835,20 +944,46 @@ let oldBBox = { min: [0, 0, 0], max: [0, 0, 0] }
 let compilerSource = ''
 let currentLanguage = 'glsl'
 let webgpuRenderer = null
-async function loadNewModel(source, language) {
+async function loadNewModel(source, language, colorModel) {
   const logDiv = document.getElementById('logf')
   if (logDiv) logDiv.innerHTML = ''
   jsLogf('Compiling new model. Language: ' + language)
   let firstRun = (compilerSource == '')
   compilerSource = source
+  // The remote-source flag describes the currently loaded document; consume it.
+  const remoteSource = !!window.__irmfRemoteSource
+  window.__irmfRemoteSource = false
 
   if (language && language !== currentLanguage) {
     jsLogf('Switching language from ' + currentLanguage + ' to ' + language)
+    const previousLanguage = currentLanguage
     currentLanguage = language
     // Update Monaco language
     monaco.editor.setModelLanguage(editor.getModel(), language)
 
-    if (language === 'wgsl') {
+    if (previousLanguage === 'tsl' && language !== 'tsl' && tslRuntime) {
+      // Free GPU resources while TSL is not in use.
+      tslRuntime.unload()
+    }
+
+    if (language === 'tsl') {
+      if (!confirmRemoteTSL(remoteSource)) {
+        jsLogf('TSL execution was declined; the model was not loaded.')
+        return
+      }
+      jsLogf('TSL models are JavaScript and run in your browser.')
+      try {
+        await getTSLRuntime()
+      } catch (e) {
+        console.error(e)
+        jsLogf('TSL: failed to initialize the three.js renderer: ' + e.message)
+        return
+      }
+      tslCanvas.style.display = 'block'
+      gpuCanvas.style.display = 'none'
+      activeRenderer = tslRuntime
+    } else if (language === 'wgsl') {
+      tslCanvas.style.display = 'none'
       if (!webgpuRenderer) {
         webgpuRenderer = new WebGPURenderer(gpuCanvas)
         try {
@@ -863,6 +998,7 @@ async function loadNewModel(source, language) {
       gpuCanvas.style.display = 'block'
       activeRenderer = webgpuRenderer
     } else {
+      tslCanvas.style.display = 'none'
       gpuCanvas.style.display = 'none'
       activeRenderer = renderer
     }
@@ -870,7 +1006,17 @@ async function loadNewModel(source, language) {
     controls.domElement = canvas
   }
 
-  if (activeRenderer === webgpuRenderer) {
+  if (currentLanguage === 'tsl' && tslRuntime) {
+    try {
+      await tslRuntime.load(source, colorModel)
+      jsLogf('TSL: Model loaded and rendered.')
+    } catch (e) {
+      console.error(e)
+      jsLogf('TSL COMPILATION ERROR: ' + e.message)
+      if (e.line) highlightShaderError(e.line, e.col || 1)
+      return
+    }
+  } else if (activeRenderer === webgpuRenderer) {
     await webgpuRenderer.loadNewModel(source)
     jsLogf('WebGPU: Model loaded and rendered.')
   }
@@ -1273,8 +1419,11 @@ let getIntersects = function (point, objects) {
   return raycaster.intersectObjects(objects)
 }
 function activateHudViewport() {
-  if (activeRenderer.getViewport) {
-    activeRenderer.getViewport(fullViewport)
+  // The TSL runtime has no viewport API; the HUD always lives on the legacy
+  // r110 renderer, so fall back to it.
+  const vpSource = (activeRenderer && activeRenderer.getViewport) ? activeRenderer : renderer
+  if (vpSource && vpSource.getViewport) {
+    vpSource.getViewport(fullViewport)
   }
   let width = hudSize
   const fvWidth = fullViewport.z || fullViewport.width
@@ -1352,9 +1501,19 @@ function onCanvasResize() {
   hudCameraPerspective.aspect = hudAspectRatio
   hudCameraPerspective.updateProjectionMatrix()
 
-  activeRenderer.setSize(canvas.width, canvas.height)
-  if (activeRenderer.getViewport) {
-    activeRenderer.getViewport(fullViewport)
+  if (currentLanguage === 'tsl' && tslRuntime) {
+    tslRuntime.resize()
+  }
+  if (activeRenderer && typeof activeRenderer.setSize === 'function') {
+    activeRenderer.setSize(canvas.width, canvas.height)
+    if (activeRenderer.getViewport) {
+      activeRenderer.getViewport(fullViewport)
+    }
+  } else {
+    renderer.setSize(canvas.width, canvas.height)
+    if (renderer.getViewport) {
+      renderer.getViewport(fullViewport)
+    }
   }
   controls.handleResize()
   render()
@@ -1403,18 +1562,22 @@ function updateAxes() {
     mainAxesHelper.renderOrder = axesParameters.showThrough ? 1000 : 0
   }
 
-  if (currentLanguage === 'wgsl') {
+  if (currentLanguage === 'wgsl' || currentLanguage === 'tsl') {
+    const modelCanvas = currentLanguage === 'wgsl' ? gpuCanvas : tslCanvas
     if (axesParameters.showThrough) {
       canvas.style.zIndex = '1'
-      gpuCanvas.style.zIndex = '0'
+      modelCanvas.style.zIndex = '0'
     } else {
       canvas.style.zIndex = '0'
-      gpuCanvas.style.zIndex = '1'
+      modelCanvas.style.zIndex = '1'
     }
-    gpuCanvas.style.pointerEvents = 'none'
+    modelCanvas.style.pointerEvents = 'none'
+    // Keep the inactive model canvas out of the stacking order.
+    ;(currentLanguage === 'wgsl' ? tslCanvas : gpuCanvas).style.zIndex = '0'
   } else {
     canvas.style.zIndex = '1'
     gpuCanvas.style.zIndex = '0'
+    tslCanvas.style.zIndex = '0'
   }
 }
 
@@ -1424,7 +1587,13 @@ function render() {
     modelCentroidNull.updateMatrixWorld()
   }
 
-  if (activeRenderer && activeRenderer === webgpuRenderer) {
+  if (currentLanguage === 'tsl' && tslRuntime) {
+    tslRuntime.render(activeCamera)
+    // The legacy renderer draws the axes/HUD overlay on its own canvas.
+    renderer.setClearColor(0x000000, 0)
+    renderer.clear()
+    renderer.render(scene, activeCamera)
+  } else if (activeRenderer && activeRenderer === webgpuRenderer) {
     webgpuRenderer.render(scene, activeCamera)
     renderer.setClearColor(0x000000, 0)
     renderer.clear()

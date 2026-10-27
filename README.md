@@ -14,7 +14,9 @@ shader source and save it locally or all edits will be lost!
 ## Summary
 
 IRMF is a file format used to describe [GLSL
-ES](https://en.wikipedia.org/wiki/OpenGL_ES) shaders that define the
+ES](https://en.wikipedia.org/wiki/OpenGL_ES),
+[WGSL](https://www.w3.org/TR/WGSL/), or
+[TSL](https://threejs.org/docs/TSL.html) shaders that define the
 materials in a 3D object with infinite resolution. IRMF completely
 eliminates the need for [software
 slicers](https://en.wikipedia.org/wiki/Slicer_(3D_printing)),
@@ -23,6 +25,25 @@ slicers](https://en.wikipedia.org/wiki/Slicer_(3D_printing)),
 [3D printers](https://en.wikipedia.org/wiki/3D_printing).
 
 I believe that IRMF shaders will some day revolutionize the 3D-printing industry.
+
+## Shader languages
+
+The editor renders all three IRMF languages:
+
+| `language` | Renderer | Requirements |
+|---|---|---|
+| `glsl` | three.js r110 WebGL | WebGL2 |
+| `wgsl` | hand-written raw WebGPU pipeline | WebGPU |
+| `tsl` | modern three.js `WebGPURenderer` + `NodeMaterial` | WebGPU, or WebGL2 fallback |
+
+TSL models are **executable JavaScript** that build a three.js node graph. The
+editor evaluates them in the page, so it asks for confirmation the first time
+per session that a TSL model is loaded **from a URL**. TSL is pinned to
+three.js `0.180.0` (see the import map in `index.html`); each example records
+its `tslVersion`.
+
+You can load a local example with `/?file=/examples/<dir>/<base>-tsl.irmf` when
+the test server mounts the corpus (see `tests/e2e/README.md`).
 
 See [github.com/gmlewis/irmf](https://github.com/gmlewis/irmf) for more
 details.
