@@ -273,18 +273,24 @@ export async function createRuntime(opts = {}) {
       .div(uniforms.u_diag)
       .toVarying('tsl_v_d');
 
-    const raw = callEntry(entryFn, xyz);
-    const values = materialValues(raw, count);
-    if (values.length !== count) {
-      throw new Error(`entry point \`${entryName}\` returned ${values.length} values but ${count} materials are declared`);
-    }
+    // Build the graph inside Fn() so that bodies using .toVar()/.assign()
+    // (e.g. loops) have a TSL stack, exactly as the CLI compiler does.
+    const fragment = TSL.Fn(([p]) => {
+      const raw = callEntry(entryFn, p);
+      const values = materialValues(raw, count);
+      if (values.length !== count) {
+        throw new Error(
+          `entry point \`${entryName}\` returned ${values.length} values but ${count} materials are declared`
+        );
+      }
+      const mixed = buildColorTerms(cm, values);
+      const inBounds = TSL.all(p.greaterThanEqual(uniforms.u_ll)).and(
+        TSL.all(p.lessThanEqual(uniforms.u_ur))
+      );
+      return TSL.select(inBounds, mixed.mul(sliceD), TSL.vec4(0, 0, 0, 0));
+    });
     state.valuesCount = count;
-
-    const mixed = buildColorTerms(cm, values);
-    const inBounds = TSL.all(xyz.greaterThanEqual(uniforms.u_ll)).and(
-      TSL.all(xyz.lessThanEqual(uniforms.u_ur))
-    );
-    const outColor = TSL.select(inBounds, mixed.mul(sliceD), TSL.vec4(0, 0, 0, 0));
+    const outColor = fragment(xyz);
 
     const material = new MeshBasicNodeMaterial({
       transparent: true,
