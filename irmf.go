@@ -22,6 +22,7 @@ type irmf struct {
 	Notes       string        `json:"notes"`
 	Options     editorOptions `json:"options"`
 	Title       string        `json:"title"`
+	TSLVersion  string        `json:"tslVersion,omitempty"`
 	Units       string        `json:"units"`
 	Version     string        `json:"version"`
 }
@@ -63,6 +64,7 @@ var (
 		"notes",
 		"options",
 		"title",
+		"tslVersion",
 		"units",
 		"version",
 	}
@@ -100,6 +102,14 @@ func parseJSON(s string) (*irmf, error) {
 func (i *irmf) validate(jsonBlobStr, shaderSrc string) (int, error) {
 	if i.IRMFVersion != "1.0" {
 		return findKeyLine(jsonBlobStr, "irmf"), fmt.Errorf("unsupported IRMF version: %v", i.IRMFVersion)
+	}
+	switch i.Language {
+	case "glsl", "wgsl", "tsl":
+	default:
+		return findKeyLine(jsonBlobStr, "language"), fmt.Errorf("unsupported language: %q (expected \"glsl\", \"wgsl\", or \"tsl\")", i.Language)
+	}
+	if i.Language == "tsl" && i.TSLVersion == "" {
+		logf("Warning: TSL model has no tslVersion; the editor pins three.js %s", tslThreeVersion)
 	}
 	if len(i.Materials) < 1 {
 		return findKeyLine(jsonBlobStr, "materials"), errors.New("must list at least one material name")

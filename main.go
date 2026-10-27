@@ -4,12 +4,15 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"math"
 	"net/http"
+	neturl "net/url"
 	"regexp"
+	"sort"
 	"strings"
 	"syscall/js"
 	"time"
@@ -176,8 +179,12 @@ func initShader(src []byte) interface{} {
 
 	newShader = processIncludes(newShader)
 
+	// Refresh the material-color GUI and hand the TSL runtime a descriptor of
+	// how to mix the material values into colors.
+	colorModel := setupMaterialColors(jsonBlob)
+
 	// logf("Compiling new model shader:\n%v", newShader)
-	js.Global().Call("loadNewModel", newShader+fsFooter(jsonBlob), jsonBlob.Language)
+	js.Global().Call("loadNewModel", newShader+fsFooter(jsonBlob), jsonBlob.Language, colorModel)
 
 	return nil
 }
@@ -496,23 +503,51 @@ func updateJSONOptions(jsonBlob *irmf) {
 }
 
 func loadSource() []byte {
+	href := js.Global().Get("document").Get("location").Get("href").String()
+
 	const oldPrefix = "/?s=github.com/"
-	url := js.Global().Get("document").Get("location").Get("href").String()
-	i := strings.Index(url, oldPrefix)
-	if i < 0 {
-		logf("No source requested in URL path.")
-		return nil
-	}
-	location := url[i+len(oldPrefix):]
-	lower := strings.ToLower(location)
-	if !strings.HasSuffix(lower, ".irmf") {
-		js.Global().Call("alert", "irmf-editor will only load .irmf files")
-		return nil
+	if i := strings.Index(href, oldPrefix); i >= 0 {
+		location := href[i+len(oldPrefix):]
+		lower := strings.ToLower(location)
+		if !strings.HasSuffix(lower, ".irmf") {
+			js.Global().Call("alert", "irmf-editor will only load .irmf files")
+			return nil
+		}
+
+		location = githubRawPrefix + strings.Replace(location, "/blob/", "/", 1)
+		buf, _ := curl(location)
+		if len(buf) > 0 {
+			js.Global().Set("__irmfRemoteSource", true)
+		}
+		return buf
 	}
 
-	location = githubRawPrefix + strings.Replace(location, "/blob/", "/", 1)
-	buf, _ := curl(location)
-	return buf
+	// Same-origin local file, e.g. /?file=/examples/001-sphere/sphere-1-tsl.irmf
+	const filePrefix = "/?file="
+	if i := strings.Index(href, filePrefix); i >= 0 {
+		path := href[i+len(filePrefix):]
+		if j := strings.IndexAny(path, "&#"); j >= 0 {
+			path = path[:j]
+		}
+		if decoded, err := neturl.QueryUnescape(path); err == nil {
+			path = decoded
+		}
+		if !strings.HasPrefix(path, "/") || strings.Contains(path, "..") ||
+			!strings.HasSuffix(strings.ToLower(path), ".irmf") {
+			js.Global().Call("alert", "invalid ?file= path (must be a same-origin /....irmf path)")
+			return nil
+		}
+		js.Global().Set("__irmfRemoteSource", false)
+		text := js.Global().Call("fetchTextSync", path).String()
+		if text == "" {
+			logf("Unable to load source from: %v", path)
+			return nil
+		}
+		return []byte(text)
+	}
+
+	logf("No source requested in URL path.")
+	return nil
 }
 
 var curlCache = map[string][]byte{}
@@ -660,11 +695,111 @@ void mainModel4(out vec4 materials, in vec3 xyz ) {
 `
 
 func fsFooter(jsonBlob *irmf) string {
-	if jsonBlob.Language == "wgsl" {
+	switch jsonBlob.Language {
+	case "wgsl":
 		return wgslFooter(jsonBlob)
+	case "tsl":
+		// TSL does not use shader-text footers; the runtime builds the
+		// equivalent graph from the color descriptor (setupMaterialColors).
+		return ""
 	}
 	hsvs, hsls, rgbs := processMaterialNames(jsonBlob.Materials)
-	footer, colorNames := processColors(jsonBlob.Materials, hsvs, hsls, rgbs)
+	footer, _ := processColors(jsonBlob.Materials, hsvs, hsls, rgbs)
+	return footer
+}
+
+// tslThreeVersion is the three.js release the editor's TSL runtime pins.
+const tslThreeVersion = "0.180.0"
+
+// plainColor describes a material that is rendered with a single GUI color.
+type plainColor struct {
+	Index int `json:"index"` // 1-based material index
+	Color int `json:"color"` // 1-based u_colorN uniform
+}
+
+// materialColorDescriptor tells the TSL runtime how to mix material values
+// into a color, matching the GLSL/WGSL footer math.
+type materialColorDescriptor struct {
+	Materials []string   `json:"materials"`
+	HSV       [][]int    `json:"hsv"`
+	HSL       [][]int    `json:"hsl"`
+	RGB       [][]int    `json:"rgb"`
+	Plain     []plainColor `json:"plain"`
+}
+
+func sortedKeys(m map[string]*hsvT) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+func sortedKeysHSL(m map[string]*hslT) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+func sortedKeysRGB(m map[string]*rgbT) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+// materialColorDescriptorFor computes how to mix material values into a color,
+// matching genColorMixer's math. It is pure so it can be unit tested.
+func materialColorDescriptorFor(materialNames []string) (materialColorDescriptor, []string) {
+	hsvs, hsls, rgbs := processMaterialNames(materialNames)
+
+	desc := materialColorDescriptor{
+		Materials: materialNames,
+		HSV:       [][]int{},
+		HSL:       [][]int{},
+		RGB:       [][]int{},
+		Plain:     []plainColor{},
+	}
+	usedColors := map[int]bool{}
+	for _, k := range sortedKeys(hsvs) {
+		v := hsvs[k]
+		desc.HSV = append(desc.HSV, []int{v.H, v.S, v.V})
+		usedColors[v.H], usedColors[v.S], usedColors[v.V] = true, true, true
+	}
+	for _, k := range sortedKeysHSL(hsls) {
+		v := hsls[k]
+		desc.HSL = append(desc.HSL, []int{v.H, v.S, v.L})
+		usedColors[v.H], usedColors[v.S], usedColors[v.L] = true, true, true
+	}
+	for _, k := range sortedKeysRGB(rgbs) {
+		v := rgbs[k]
+		desc.RGB = append(desc.RGB, []int{v.R, v.G, v.B})
+		usedColors[v.R], usedColors[v.G], usedColors[v.B] = true, true, true
+	}
+
+	var colorNames []string
+	nextColor := 1
+	for i := 1; i <= len(materialNames); i++ {
+		if !usedColors[i] {
+			desc.Plain = append(desc.Plain, plainColor{Index: i, Color: nextColor})
+			colorNames = append(colorNames, materialNames[i-1])
+			nextColor++
+		}
+	}
+
+	return desc, colorNames
+}
+
+// setupMaterialColors refreshes the material-color GUI controllers and returns
+// a JSON descriptor the TSL runtime uses to mix material values into colors.
+func setupMaterialColors(jsonBlob *irmf) string {
+	desc, colorNames := materialColorDescriptorFor(jsonBlob.Materials)
 
 	colorFolder := js.Global().Call("getColorFolder")
 	if colorFolder.Type() != js.TypeNull && colorFolder.Type() != js.TypeUndefined {
@@ -677,7 +812,12 @@ func fsFooter(jsonBlob *irmf) string {
 		js.Global().Call("refreshMaterialColorControllers", jsArray)
 	}
 
-	return footer
+	buf, err := json.Marshal(desc)
+	if err != nil {
+		logf("Error: unable to marshal material color descriptor: %v", err)
+		return "{}"
+	}
+	return string(buf)
 }
 
 // processColors returns a final fragment shader footer (which includes a color math

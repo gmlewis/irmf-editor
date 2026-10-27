@@ -181,3 +181,56 @@ func TestParseIncludeURL(t *testing.T) {
 		})
 	}
 }
+
+func TestMaterialColorDescriptorFor(t *testing.T) {
+	tests := []struct {
+		name          string
+		materialNames []string
+		wantHSV       [][]int
+		wantHSL       [][]int
+		wantRGB       [][]int
+		wantPlain     []plainColor
+	}{
+		{
+			name:          "plain materials",
+			materialNames: []string{"PLA", "metal"},
+			wantHSV:       [][]int{},
+			wantHSL:       [][]int{},
+			wantRGB:       [][]int{},
+			wantPlain:     []plainColor{{Index: 1, Color: 1}, {Index: 2, Color: 2}},
+		},
+		{
+			name:          "one HSV triplet plus a plain material",
+			materialNames: []string{"PLA.H", "PLA.S", "PLA.V", "metal"},
+			wantHSV:       [][]int{{1, 2, 3}},
+			wantHSL:       [][]int{},
+			wantRGB:       [][]int{},
+			wantPlain:     []plainColor{{Index: 4, Color: 1}},
+		},
+		{
+			name:          "HSL and RGB triplets",
+			materialNames: []string{"a.H", "a.S", "a.L", "b.R", "b.G", "b.B"},
+			wantHSV:       [][]int{},
+			wantHSL:       [][]int{{1, 2, 3}},
+			wantRGB:       [][]int{{4, 5, 6}},
+			wantPlain:     []plainColor{},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			desc, _ := materialColorDescriptorFor(tt.materialNames)
+			if !reflect.DeepEqual(desc.HSV, tt.wantHSV) {
+				t.Errorf("HSV = %v, want %v", desc.HSV, tt.wantHSV)
+			}
+			if !reflect.DeepEqual(desc.HSL, tt.wantHSL) {
+				t.Errorf("HSL = %v, want %v", desc.HSL, tt.wantHSL)
+			}
+			if !reflect.DeepEqual(desc.RGB, tt.wantRGB) {
+				t.Errorf("RGB = %v, want %v", desc.RGB, tt.wantRGB)
+			}
+			if !reflect.DeepEqual(desc.Plain, tt.wantPlain) {
+				t.Errorf("Plain = %v, want %v", desc.Plain, tt.wantPlain)
+			}
+		})
+	}
+}
