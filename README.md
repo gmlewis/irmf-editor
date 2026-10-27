@@ -38,9 +38,15 @@ The editor renders all three IRMF languages:
 
 TSL models are **executable JavaScript** that build a three.js node graph. The
 editor evaluates them in the page, so it asks for confirmation the first time
-per session that a TSL model is loaded **from a URL**. TSL is pinned to
-three.js `0.180.0` (see the import map in `index.html`); each example records
-its `tslVersion`.
+a particular TSL URL is loaded, showing the exact source URL. Approval is
+per URL and per page load, never session-wide. TSL is pinned to three.js
+`0.180.0` (see the import map in `index.html`); each example records its
+`tslVersion`.
+
+The evaluator shadows network, filesystem, DOM, and host-process handles and
+rejects `#include`, `export`, and dynamic `import()`. These are guardrails,
+not a hardened sandbox: a determined body can still reach JavaScript
+internals. Treat any TSL model you did not write as untrusted code.
 
 You can load a local example with `/?file=/examples/<dir>/<base>-tsl.irmf` when
 the test server mounts the corpus (see `tests/e2e/README.md`).
@@ -60,6 +66,31 @@ This means that you can add lines to your IRMF shaders like this:
 ```
 
 and the source will be retrieved (and cached) from the LYGIA server.
+
+Remote includes are executable shader code, so the editor asks for permission
+once per include host on each page load, only fetches HTTPS URLs from
+`lygia.xyz` and `raw.githubusercontent.com`, and caps the number and size of
+includes. `#include` is rejected in TSL bodies, where it would be remote
+JavaScript execution. Inline code you do not want fetched at load time.
+
+## Security
+
+An IRMF file is executable code. The editor treats every model as untrusted:
+
+- `?file=` only accepts same-origin paths (protocol-relative URLs such as
+  `//evil.example/x.irmf` are rejected in Go and again in `fetchTextSync`);
+- models loaded from a URL require confirmation that names the source URL;
+- TSL approval is per source and per page load;
+- remote includes require per-host consent and are size/count limited;
+- `#include` is rejected in TSL bodies;
+- material names, titles, and compiler diagnostics are written with
+  `textContent`, never `innerHTML`, and material names are not passed to
+  dat.GUI's HTML-based `.name()` (they render as text);
+- shader bodies are capped at 16 MiB decoded and `.irmf` files at 64 MiB.
+
+GLSL and WGSL still reach the GPU driver, and TSL still runs JavaScript in the
+page. For hostile input, use a separate browser profile or a sandboxed
+deployment; the same caveat applies to the native slicers.
 
 Congratulations and thanks go to [Patricio Gonzalez Vivo](https://github.com/sponsors/patriciogonzalezvivo)
 for making the LYGIA server available for anyone to use, and also

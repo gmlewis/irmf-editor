@@ -28,6 +28,14 @@ var (
 
 const (
 	githubRawPrefix = "https://raw.githubusercontent.com/"
+
+	// Limits applied to untrusted input. IRMF files are executable code, so
+	// cap the damage a single file can do before any rendering starts.
+	maxIRMFFileBytes   = 64 << 20 // 64 MiB raw .irmf file
+	maxShaderBodyBytes = 16 << 20 // 16 MiB decoded shader body
+	maxIncludeBytes    = 1 << 20  // 1 MiB per remote #include
+	maxIncludes        = 16       // remote #include directives per model
+	maxModelExtent     = 1 << 20  // model units along one axis
 )
 
 func main() {
@@ -177,7 +185,15 @@ func initShader(src []byte) interface{} {
 		rangeValues.Set("maxz", jsonBlob.Max[2])
 	}
 
-	newShader = processIncludes(newShader)
+	if jsonBlob.Language == "tsl" {
+		// TSL is JavaScript: fetching remote text into the body would be remote
+		// code execution. validate() rejects such models; never expand them.
+		if hasIncludeDirective(newShader) {
+			logf("Error: #include is not allowed in TSL bodies; inline the code instead")
+		}
+	} else {
+		newShader = processIncludes(newShader)
+	}
 
 	// Refresh the material-color GUI and hand the TSL runtime a descriptor of
 	// how to mix the material values into colors.
@@ -353,6 +369,11 @@ func (m rgbMap) keys() (result []string) {
 }
 
 func parseEditor(src []byte) (*irmf, string) {
+	if len(src) > maxIRMFFileBytes {
+		logf("IRMF file is too large (%v bytes; limit is %v)", len(src), maxIRMFFileBytes)
+		js.Global().Call("highlightShaderError", 1)
+		return nil, ""
+	}
 	if bytes.Index(src, []byte("/*{")) != 0 {
 		logf(`Unable to find leading "/*{"`) // TODO: Turn errors into hover-over text.
 		js.Global().Call("highlightShaderError", 1)
@@ -395,8 +416,12 @@ func parseEditor(src []byte) (*irmf, string) {
 			return err
 		}
 		buf := &bytes.Buffer{}
-		if _, err := io.Copy(buf, zr); err != nil {
+		// Cap decompression so a small file cannot expand into a memory bomb.
+		if _, err := io.Copy(buf, io.LimitReader(zr, maxShaderBodyBytes+1)); err != nil {
 			return err
+		}
+		if buf.Len() > maxShaderBodyBytes {
+			return fmt.Errorf("decoded shader exceeds %v bytes", maxShaderBodyBytes)
 		}
 		if err := zr.Close(); err != nil {
 			return err
@@ -423,6 +448,10 @@ func parseEditor(src []byte) (*irmf, string) {
 		}
 		jsonBlob.Encoding = nil
 	} else {
+		if len(shaderSrcBuf) > maxShaderBodyBytes {
+			logf("Shader body is too large (%v bytes; limit is %v)", len(shaderSrcBuf), maxShaderBodyBytes)
+			return nil, ""
+		}
 		shaderSrc = string(shaderSrcBuf)
 	}
 
@@ -515,9 +544,15 @@ func loadSource() []byte {
 		}
 
 		location = githubRawPrefix + strings.Replace(location, "/blob/", "/", 1)
+		if !js.Global().Call("confirmRemoteModel", location).Bool() {
+			logf("Remote model from %v was not approved", location)
+			return nil
+		}
 		buf, _ := curl(location)
 		if len(buf) > 0 {
-			js.Global().Set("__irmfRemoteSource", true)
+			// Record the exact URL so the consent prompt can name the source
+			// and so approval is per model, not per session.
+			js.Global().Set("__irmfRemoteSource", location)
 		}
 		return buf
 	}
@@ -533,8 +568,7 @@ func loadSource() []byte {
 		if decoded, err := neturl.PathUnescape(path); err == nil {
 			path = decoded
 		}
-		if !strings.HasPrefix(path, "/") || strings.Contains(path, "..") ||
-			!strings.HasSuffix(strings.ToLower(path), ".irmf") {
+		if !isSafeSameOriginPath(path) {
 			js.Global().Call("alert", "invalid ?file= path (must be a same-origin /....irmf path)")
 			return nil
 		}
@@ -549,6 +583,46 @@ func loadSource() []byte {
 
 	logf("No source requested in URL path.")
 	return nil
+}
+
+// isSafeSameOriginPath reports whether path (already percent-decoded) is a
+// same-origin absolute path pointing at an .irmf file.
+//
+// This must reject protocol-relative URLs such as "//evil.example/x.irmf":
+// a browser resolves those to another origin, which would let a link run
+// remote TSL without the user ever seeing the remote-source prompt.
+// Backslashes are rejected too because browsers normalize "/\" to "//".
+func isSafeSameOriginPath(path string) bool {
+	if path == "" || path[0] != '/' {
+		return false
+	}
+	if len(path) > 1 && (path[1] == '/' || path[1] == '\\') {
+		return false
+	}
+	if strings.ContainsAny(path, "\\\x00\r\n") {
+		return false
+	}
+	if strings.Contains(path, "..") {
+		return false
+	}
+	if !strings.HasSuffix(strings.ToLower(path), ".irmf") {
+		return false
+	}
+	u, err := neturl.Parse(path)
+	if err != nil || u.Scheme != "" || u.Host != "" || u.User != nil {
+		return false
+	}
+	return true
+}
+
+// hasIncludeDirective reports whether src contains an #include line.
+func hasIncludeDirective(src string) bool {
+	for _, line := range strings.Split(src, "\n") {
+		if strings.HasPrefix(strings.TrimSpace(line), "#include") {
+			return true
+		}
+	}
+	return false
 }
 
 var curlCache = map[string][]byte{}
@@ -577,6 +651,10 @@ func saveToCache(this js.Value, args []js.Value) interface{} {
 }
 
 func curl(url string) ([]byte, error) {
+	return curlLimited(url, maxShaderBodyBytes)
+}
+
+func curlLimited(url string, limit int64) ([]byte, error) {
 	buf, ok := curlCache[url]
 	if ok {
 		return buf, nil
@@ -585,14 +663,22 @@ func curl(url string) ([]byte, error) {
 	resp, err := http.Get(url)
 	if err != nil {
 		logf("Unable to download source from: %v", url)
-		js.Global().Call("alert", "unable to load source from "+url)
-		return nil, nil
+		return nil, err
 	}
 	defer resp.Body.Close()
-	buf, err = ioutil.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		logf("Unable to download source from: %v (HTTP %v)", url, resp.StatusCode)
+		return nil, fmt.Errorf("HTTP %v", resp.StatusCode)
+	}
+	// Cap the response so a hostile server cannot exhaust the tab's memory.
+	buf, err = ioutil.ReadAll(io.LimitReader(resp.Body, limit+1))
 	if err != nil {
 		logf("Unable to read response body.")
-		return nil, nil
+		return nil, err
+	}
+	if int64(len(buf)) > limit {
+		logf("Remote source from %v exceeds %v bytes; ignoring", url, limit)
+		return nil, fmt.Errorf("response exceeds %v bytes", limit)
 	}
 	logf("Read %v bytes from %v", len(buf), url)
 
@@ -602,6 +688,11 @@ func curl(url string) ([]byte, error) {
 
 var (
 	includeRE = regexp.MustCompile(`^#include\s+"([^"]+)"`)
+	// GitHub includes must name an immutable commit (40 hex characters).
+	// Branch and tag names can be moved by the repository owner, which would
+	// change the code a model executes without changing the model file.
+	githubIncludeRE = regexp.MustCompile(
+		`^github\.com/([^/]+)/([^/]+)/(?:(?:blob|raw)/)?([0-9a-fA-F]{40})/(.+)$`)
 )
 
 const (
@@ -628,9 +719,11 @@ func parseIncludeURL(trimmed string) string {
 	case strings.HasPrefix(inc, prefix2):
 		return fmt.Sprintf("%v/%v", lygiaBaseURL, inc[len(prefix2):])
 	case strings.HasPrefix(inc, prefix3):
-		location := inc[len(prefix3):]
-		location = strings.Replace(location, "/blob/", "/", 1)
-		return githubRawPrefix + location
+		m := githubIncludeRE.FindStringSubmatch(inc)
+		if m == nil {
+			return ""
+		}
+		return fmt.Sprintf("%v%v/%v/%v/%v", githubRawPrefix, m[1], m[2], m[3], m[4])
 	default:
 		return ""
 	}
@@ -638,40 +731,91 @@ func parseIncludeURL(trimmed string) string {
 
 // processIncludes converts "#include" lines (with recognized prefixes)
 // into their actual source by retrieving them from the internet.
+//
+// Remote includes are fetched code, so this function requires explicit user
+// consent per host (see confirmRemoteInclude in js/startup.js), caps the number
+// and size of fetched files, and never touches TSL bodies (callers must check
+// the language first; TSL includes are rejected during validation).
+//
 // Note that multiline comments ("/*" and "*/") are currently not supported.
 // It is recommended that an ignored "#include" statement should be commented-out
 // with single-line comments ("//...").
 func processIncludes(source string) string {
 	lines := strings.Split(source, "\n")
 	var result []string
+	includeCount := 0
+	var totalIncludeBytes int64
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
-		if url := parseIncludeURL(trimmed); url != "" {
-			if buf, err := curl(url); err == nil {
-				result = append(result, string(buf))
+		url := parseIncludeURL(trimmed)
+		if url == "" {
+			if strings.HasPrefix(trimmed, "#include") {
+				logf("Blocked unsupported or unpinned #include: %v", trimmed)
 			}
+			result = append(result, line)
 			continue
 		}
 
-		result = append(result, line)
+		if includeCount >= maxIncludes {
+			logf("Blocked remote include: model exceeds the %v-include limit", maxIncludes)
+			result = append(result, line)
+			continue
+		}
+		host := includeHost(url)
+		if host == "" {
+			logf("Blocked remote include with an unsupported URL")
+			result = append(result, line)
+			continue
+		}
+		if !js.Global().Call("confirmRemoteInclude", host).Bool() {
+			logf("Remote include from %v was not approved; it was not downloaded", host)
+			result = append(result, line)
+			continue
+		}
+
+		buf, err := curlLimited(url, maxIncludeBytes)
+		if err != nil {
+			result = append(result, line)
+			continue
+		}
+		totalIncludeBytes += int64(len(buf))
+		if totalIncludeBytes > maxIncludes*maxIncludeBytes {
+			logf("Blocked remote include: total included source is too large")
+			result = append(result, line)
+			continue
+		}
+		includeCount++
+		result = append(result, string(buf))
 	}
 
 	return strings.Join(result, "\n")
 }
 
+// includeHost returns the host name of an https URL, or "" if the URL is not
+// an acceptable remote-include URL.
+func includeHost(rawURL string) string {
+	u, err := neturl.Parse(rawURL)
+	if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil {
+		return ""
+	}
+	return u.Hostname()
+}
+
 func clearLog() {
-	if logfDiv.Type() != js.TypeNull {
-		logfDiv.Set("innerHTML", "")
+	if logfDiv.Type() != js.TypeNull && logfDiv.Type() != js.TypeUndefined {
+		logfDiv.Set("textContent", "")
 	}
 }
 
+// logf appends a message to the log panel. It must go through jsLogf (which
+// uses textContent), never through innerHTML: log messages contain shader
+// source, URLs, and other attacker-controlled text.
 func logf(fmtStr string, args ...interface{}) {
+	msg := fmt.Sprintf(fmtStr, args...)
 	if logfDiv.Type() != js.TypeNull && logfDiv.Type() != js.TypeUndefined {
-		txt := logfDiv.Get("innerHTML").String()
-		txt += fmt.Sprintf("<div>"+fmtStr+"</div>", args...)
-		logfDiv.Set("innerHTML", txt)
+		js.Global().Call("jsLogf", msg)
 	} else {
-		fmt.Printf(fmtStr+"\n", args...)
+		fmt.Println(msg)
 	}
 }
 
@@ -721,10 +865,10 @@ type plainColor struct {
 // materialColorDescriptor tells the TSL runtime how to mix material values
 // into a color, matching the GLSL/WGSL footer math.
 type materialColorDescriptor struct {
-	Materials []string   `json:"materials"`
-	HSV       [][]int    `json:"hsv"`
-	HSL       [][]int    `json:"hsl"`
-	RGB       [][]int    `json:"rgb"`
+	Materials []string     `json:"materials"`
+	HSV       [][]int      `json:"hsv"`
+	HSL       [][]int      `json:"hsl"`
+	RGB       [][]int      `json:"rgb"`
 	Plain     []plainColor `json:"plain"`
 }
 

@@ -166,9 +166,18 @@ func TestParseIncludeURL(t *testing.T) {
 			want:    "https://lygia.xyz/math/decimation.glsl",
 		},
 		{
-			name:    "github normal",
+			name:    "github pinned commit",
+			trimmed: `#include "github.com/gmlewis/irmf-examples/blob/6bb268f05fbe1c68a68ec1e66ce4c5d335bdf021/examples/012-bifilar-electromagnet/rotation.glsl"`,
+			want:    "https://raw.githubusercontent.com/gmlewis/irmf-examples/6bb268f05fbe1c68a68ec1e66ce4c5d335bdf021/examples/012-bifilar-electromagnet/rotation.glsl",
+		},
+		{
+			name:    "github pinned commit, no blob segment",
+			trimmed: `#include "github.com/gmlewis/irmf-examples/6bb268f05fbe1c68a68ec1e66ce4c5d335bdf021/examples/012-bifilar-electromagnet/rotation.glsl"`,
+			want:    "https://raw.githubusercontent.com/gmlewis/irmf-examples/6bb268f05fbe1c68a68ec1e66ce4c5d335bdf021/examples/012-bifilar-electromagnet/rotation.glsl",
+		},
+		{
+			name:    "github branch is rejected",
 			trimmed: `#include "github.com/gmlewis/irmf-examples/blob/master/examples/012-bifilar-electromagnet/rotation.glsl"`,
-			want:    "https://raw.githubusercontent.com/gmlewis/irmf-examples/master/examples/012-bifilar-electromagnet/rotation.glsl",
 		},
 	}
 
@@ -232,5 +241,49 @@ func TestMaterialColorDescriptorFor(t *testing.T) {
 				t.Errorf("Plain = %v, want %v", desc.Plain, tt.wantPlain)
 			}
 		})
+	}
+}
+
+func TestIsSafeSameOriginPath(t *testing.T) {
+	tests := []struct {
+		path string
+		want bool
+	}{
+		{"/examples/001-sphere/sphere-1.irmf", true},
+		{"/examples/axial+radial.irmf", true},
+		{"/examples/UPPER.IRMF", true},
+		{"//evil.example/x.irmf", false},
+		{"/\\evil.example/x.irmf", false},
+		{"/a\\b.irmf", false},
+		{"/a/../x.irmf", false},
+		{"https://evil.example/x.irmf", false},
+		{"x.irmf", false},
+		{"", false},
+		{"/examples/x.irmf?x=1", false},
+		{"/examples/x.irmf#frag", false},
+		{"/examples/x.txt", false},
+	}
+	for _, tt := range tests {
+		if got := isSafeSameOriginPath(tt.path); got != tt.want {
+			t.Errorf("isSafeSameOriginPath(%q) = %v, want %v", tt.path, got, tt.want)
+		}
+	}
+}
+
+func TestHasIncludeDirective(t *testing.T) {
+	tests := []struct {
+		src  string
+		want bool
+	}{
+		{"void mainModel4() {}\n", false},
+		{"  #include \"lygia/math/decimation.glsl\"\n", true},
+		{"// #include \"lygia/x.glsl\"\n", false},
+		{"float s = 1.0; // #include not at start\n", false},
+		{"const a = 1;\n#include \"github.com/x/y/z.glsl\"\n", true},
+	}
+	for _, tt := range tests {
+		if got := hasIncludeDirective(tt.src); got != tt.want {
+			t.Errorf("hasIncludeDirective(%q) = %v, want %v", tt.src, got, tt.want)
+		}
 	}
 }
