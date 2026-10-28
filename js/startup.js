@@ -579,6 +579,22 @@ function confirmRemoteModel(url) {
   return ok
 }
 
+// A branch or tag include can change after the model was reviewed. Ask
+// separately for each mutable include, once per page load.
+const approvedMutableIncludes = new Set()
+function confirmMutableInclude(source) {
+  source = String(source || '')
+  if (!source) return false
+  if (approvedMutableIncludes.has(source)) return true
+  const ok = window.confirm(
+    'This model includes code from a branch or tag:\n\n' + source +
+    '\n\nThat code can change after the model was reviewed. ' +
+    'A commit-pinned include is safer. Allow this mutable include?'
+  )
+  if (ok) approvedMutableIncludes.add(source)
+  return ok
+}
+
 // Ask once per host per page load before downloading shader code. Kept in
 // memory (not sessionStorage) so a new page load always asks again.
 const approvedIncludeHosts = new Set()

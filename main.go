@@ -693,6 +693,9 @@ var (
 	// change the code a model executes without changing the model file.
 	githubIncludeRE = regexp.MustCompile(
 		`^github\.com/([^/]+)/([^/]+)/(?:(?:blob|raw)/)?([0-9a-fA-F]{40})/(.+)$`)
+	// Only used after the user explicitly allows a mutable include.
+	githubMutableIncludeRE = regexp.MustCompile(
+		`^github\.com/([^/]+)/([^/]+)/(?:blob|raw)/([^/]+)/(.+)$`)
 )
 
 const (
@@ -701,6 +704,50 @@ const (
 	prefix2      = "lygia/"
 	prefix3      = "github.com/"
 )
+
+// mutableIncludeURL returns the raw GitHub URL for an #include that names a
+// branch or tag, or "" if it is not a mutable GitHub include. It is only used
+// after the user has explicitly approved a mutable include; parseIncludeURL
+// remains strict.
+func mutableIncludeURL(trimmed string) string {
+	m := includeRE.FindStringSubmatch(trimmed)
+	if len(m) < 2 {
+		return ""
+	}
+	inc := m[1]
+	if !strings.HasSuffix(inc, ".glsl") || !strings.HasPrefix(inc, prefix3) {
+		return ""
+	}
+	if githubIncludeRE.MatchString(inc) {
+		return "" // already pinned; parseIncludeURL handles it
+	}
+	m = githubMutableIncludeRE.FindStringSubmatch(inc)
+	if m == nil {
+		return ""
+	}
+	if !safeIncludeRefAndPath(m[3], m[4]) {
+		return ""
+	}
+	return fmt.Sprintf("%v%v/%v/%v/%v", githubRawPrefix, m[1], m[2], m[3], m[4])
+}
+
+// safeIncludeRefAndPath rejects refs and paths that would change the meaning
+// of the constructed URL or traverse the fetched path.
+func safeIncludeRefAndPath(ref, path string) bool {
+	if ref == "" || ref == "." || ref == ".." ||
+		strings.Contains(ref, "..") || strings.ContainsAny(ref, `\?#%`) {
+		return false
+	}
+	if strings.ContainsAny(path, `\?#%`) || strings.ContainsAny(path, "\x00\r\n") {
+		return false
+	}
+	for _, part := range strings.Split(path, "/") {
+		if part == "." || part == ".." {
+			return false
+		}
+	}
+	return true
+}
 
 func parseIncludeURL(trimmed string) string {
 	m := includeRE.FindStringSubmatch(trimmed)
@@ -720,7 +767,7 @@ func parseIncludeURL(trimmed string) string {
 		return fmt.Sprintf("%v/%v", lygiaBaseURL, inc[len(prefix2):])
 	case strings.HasPrefix(inc, prefix3):
 		m := githubIncludeRE.FindStringSubmatch(inc)
-		if m == nil {
+		if m == nil || !safeIncludeRefAndPath(m[3], m[4]) {
 			return ""
 		}
 		return fmt.Sprintf("%v%v/%v/%v/%v", githubRawPrefix, m[1], m[2], m[3], m[4])
@@ -748,6 +795,15 @@ func processIncludes(source string) string {
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
 		url := parseIncludeURL(trimmed)
+		if url == "" && strings.HasPrefix(trimmed, "#include") {
+			// A branch/tag include is mutable, so it needs an explicit
+			// per-file approval in addition to the host approval below.
+			if mutableURL := mutableIncludeURL(trimmed); mutableURL != "" &&
+				js.Global().Call("confirmMutableInclude", trimmed).Bool() {
+				url = mutableURL
+				logf("WARNING: fetching mutable include: %v", trimmed)
+			}
+		}
 		if url == "" {
 			if strings.HasPrefix(trimmed, "#include") {
 				logf("Blocked unsupported or unpinned #include: %v", trimmed)

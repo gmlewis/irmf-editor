@@ -287,3 +287,50 @@ func TestHasIncludeDirective(t *testing.T) {
 		}
 	}
 }
+
+func TestMutableIncludeURL(t *testing.T) {
+	const sha = "6bb268f05fbe1c68a68ec1e66ce4c5d335bdf021"
+	tests := []struct {
+		name    string
+		trimmed string
+		want    string
+	}{
+		{
+			name:    "branch",
+			trimmed: `#include "github.com/gmlewis/irmf-examples/blob/master/examples/012-bifilar-electromagnet/rotation.glsl"`,
+			want:    "https://raw.githubusercontent.com/gmlewis/irmf-examples/master/examples/012-bifilar-electromagnet/rotation.glsl",
+		},
+		{
+			name:    "tag with raw segment",
+			trimmed: `#include "github.com/o/r/raw/v1.2.3/x.glsl"`,
+			want:    "https://raw.githubusercontent.com/o/r/v1.2.3/x.glsl",
+		},
+		{
+			name:    "pinned is not mutable",
+			trimmed: `#include "github.com/o/r/blob/` + sha + `/x.glsl"`,
+		},
+		{
+			name:    "traversal rejected",
+			trimmed: `#include "github.com/o/r/blob/master/../../x.glsl"`,
+		},
+		{
+			name:    "query rejected",
+			trimmed: `#include "github.com/o/r/blob/master/x.glsl?raw=1"`,
+		},
+		{
+			name:    "lygia is not GitHub",
+			trimmed: `#include "lygia/math/decimation.glsl"`,
+		},
+		{
+			name:    "not glsl",
+			trimmed: `#include "github.com/o/r/blob/master/x.wgsl"`,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := mutableIncludeURL(tt.trimmed); got != tt.want {
+				t.Errorf("mutableIncludeURL = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}

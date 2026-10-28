@@ -82,6 +82,9 @@ An IRMF file is executable code. The editor treats every model as untrusted:
 - models loaded from a URL require confirmation that names the source URL;
 - TSL approval is per source and per page load;
 - remote includes require per-host consent and are size/count limited;
+- a GitHub include that names a branch or tag is rejected unless you approve
+  that specific mutable include in a separate prompt; commit-pinned includes
+  need no such prompt;
 - `#include` is rejected in TSL bodies;
 - material names, titles, and compiler diagnostics are written with
   `textContent`, never `innerHTML`, and material names are not passed to
